@@ -35,15 +35,20 @@
   .gate{max-width:360px;margin:120px auto;text-align:center}
   .gate input{width:100%;margin:16px 0 10px;padding:12px}
   .gate button{width:100%;padding:12px}
+  #diag{display:none;text-align:left;white-space:pre-wrap;word-break:break-all;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px;font-size:11px;line-height:1.6;color:var(--sub);max-height:50vh;overflow:auto}
   #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--gold);border-radius:10px;padding:10px 20px;font-weight:800;display:none;max-width:90%;text-align:center}
 </style>
 </head>
 <body>
 <div id="gate" class="gate">
   <h1>PIKU 관리자</h1>
-  <input id="tokenInput" type="password" placeholder="관리자 비밀번호" autocomplete="off">
+  <input id="tokenInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"
+         autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text">
   <button onclick="login()">접속</button>
   <p class="muted" style="margin-top:10px">Vercel의 ADMIN_TOKEN 값 (기본: dev-admin)</p>
+  <p class="muted" style="margin-top:4px">빌드 __BUILD__</p>
+  <button class="ghost" style="margin-top:14px" onclick="diagnose()">서버 진단</button>
+  <pre id="diag"></pre>
 </div>
 
 <div id="app" class="wrap" style="display:none">
@@ -59,31 +64,77 @@
 <div id="toast"></div>
 
 <script>
-// 비번에서 영문/숫자/일반기호만 남기고 전부 제거 — 아이폰 자동변환 문자, 공백, 한글 등으로 인한 전송 오류 방지
+// 아이폰 자동변환/자동완성으로 붙는 앞뒤 공백·개행 제거 (비번 자체는 건드리지 않는다)
 function clean(v){ return (v||'').trim(); }
-var TOKEN = clean(localStorage.getItem('admin_token'));
+// 사파리 프라이빗 모드에서는 localStorage 접근 자체가 예외를 던진다 → 감싼다
+function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} return null; }
+var TOKEN = clean(store('admin_token'));
 function $(s){ return document.querySelector(s); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function num(n){ return Number(n||0).toLocaleString('ko-KR'); }
 function toast(m){ var t=$('#toast'); t.textContent=m; t.style.display='block'; setTimeout(function(){t.style.display='none';},2600); }
 
+// r.json()을 쓰면 서버가 JSON이 아닌 응답(플랫폼 HTML 오류 페이지, 504 등)을 줬을 때
+// 사파리가 "The string did not match the expected pattern."이라는 정체불명 에러만 던진다.
+// → 항상 text()로 받아서 직접 파싱하고, 실패하면 상태코드와 본문 앞부분을 그대로 노출한다.
 function api(path, body){
-  var url = path + (path.indexOf('?')>=0?'&':'?') + 'token=' + encodeURIComponent(TOKEN);
-  return fetch(url,{
-    method: body?'POST':'GET',
-    headers: body?{'Content-Type':'application/json'}:{},
-    body: body?JSON.stringify(body):undefined
-  }).then(function(r){
-    if(r.status===403){ logout(); throw new Error('비밀번호가 올바르지 않아요'); }
-    return r.json().then(function(d){ if(!r.ok) throw new Error(d.message||d.error||'요청 실패'); return d; });
+  var url = path + (path.indexOf('?')>=0?'&':'?') + 'token=' + encodeURIComponent(TOKEN)
+    + '&_=' + Date.now(); // 캐시 우회
+  var opt = { method: body?'POST':'GET', cache:'no-store', headers:{} };
+  if(body){ opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body); }
+  return fetch(url,opt).then(function(r){
+    return r.text().then(function(text){ return { status:r.status, ok:r.ok, text:text }; });
+  },function(netErr){
+    throw new Error('서버에 연결하지 못했어요 ('+(netErr&&netErr.message||netErr)+')');
+  }).then(function(res){
+    var data=null, parsed=true;
+    try { data = JSON.parse(res.text); } catch(e){ parsed=false; }
+    if(!parsed){
+      throw new Error('서버가 JSON이 아닌 응답을 보냈어요 · HTTP '+res.status+' · '
+        + (res.text ? res.text.replace(/\s+/g,' ').slice(0,180) : '(빈 응답)'));
+    }
+    if(res.status===403){ logout(); throw new Error('비밀번호가 올바르지 않아요 (서버가 거부)'); }
+    if(!res.ok) throw new Error((data.message||data.error||'요청 실패')+' · HTTP '+res.status);
+    return data;
   });
 }
-function login(){ TOKEN=clean($('#tokenInput').value); localStorage.setItem('admin_token',TOKEN); boot(); }
-function logout(){ localStorage.removeItem('admin_token'); $('#app').style.display='none'; $('#gate').style.display='block'; }
+
+// 로그인이 안 될 때 원인을 계층별로 잘라서 보여준다: 라우팅 → DB → 토큰
+function diagnose(){
+  var box=document.getElementById('diag');
+  box.style.display='block';
+  box.textContent='진단 중...\n';
+  var typed=clean(document.getElementById('tokenInput').value);
+  function probe(label,path){
+    return fetch(path+'&_='+Date.now(),{cache:'no-store'}).then(function(r){
+      return r.text().then(function(t){
+        box.textContent += '\n[' + label + '] HTTP ' + r.status + '\n'
+          + (r.headers.get('content-type')||'(content-type 없음)') + '\n'
+          + (t ? t.replace(/\s+/g,' ').slice(0,400) : '(빈 응답)') + '\n';
+      });
+    }).catch(function(e){
+      box.textContent += '\n[' + label + '] 요청 실패: ' + (e&&e.message||e) + '\n';
+    });
+  }
+  box.textContent = 'page: ' + location.href + '\n';
+  probe('health','/health?x=1')
+    .then(function(){ return probe('admin/ping (입력한 비번)','/admin/ping?token='+encodeURIComponent(typed)); })
+    .then(function(){ return probe('admin/overview (입력한 비번)','/admin/overview?token='+encodeURIComponent(typed)); })
+    .then(function(){ box.textContent += '\n— 진단 끝. 이 내용을 그대로 복사해서 보내주세요.'; });
+}
+function login(){ TOKEN=clean($('#tokenInput').value); store('admin_token',TOKEN); boot(); }
+function logout(){ store('admin_token',null); $('#app').style.display='none'; $('#gate').style.display='block'; }
 function boot(){
   api('/admin/overview').then(function(){
-    $('#gate').style.display='none'; $('#app').style.display='block'; go('dash');
-  }).catch(function(e){ toast(e.message); });
+    $('#gate').style.display='none'; $('#app').style.display='block';
+    var d=$('#diag'); if(d) d.style.display='none';
+    go('dash');
+  }).catch(function(e){
+    toast(e.message);
+    var d=$('#diag');
+    if(d){ d.style.display='block'; d.textContent='로그인 실패\n\n'+e.message
+      +'\n\n원인이 명확하지 않으면 아래 "서버 진단"을 눌러 결과를 보내주세요.'; }
+  });
 }
 function go(t){
   var tabs=document.querySelectorAll('.tab');

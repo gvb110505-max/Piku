@@ -21,7 +21,9 @@ app.use((req, res, next) => {
 });
 
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "dev-admin";
+// 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
+const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
+const BUILD = "2026-08-24.2"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
@@ -32,10 +34,16 @@ async function auth(req, res, next) {
     next();
   } catch (e) { next(e); }
 }
+// 관리자 토큰 추출 — 헤더 / 쿼리 / Authorization / 바디 전부 허용.
+// 브라우저·프록시·플랫폼마다 막히는 경로가 달라서 한 가지만 쓰면 원인을 못 찾는다.
+function adminTokenOf(req) {
+  const bearer = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const raw = req.headers["x-admin-token"] || (req.query && req.query.token) ||
+    (req.body && req.body.admin_token) || bearer || "";
+  return String(raw).trim();
+}
 function admin(req, res, next) {
-  // 헤더 또는 ?token= 쿼리 둘 다 허용 (일부 브라우저의 커스텀 헤더 거부 문제 회피)
-  const t = req.headers["x-admin-token"] || req.query.token;
-  if (t !== ADMIN_TOKEN) return res.status(403).json({ error: "FORBIDDEN" });
+  if (adminTokenOf(req) !== ADMIN_TOKEN) return res.status(403).json({ error: "FORBIDDEN" });
   next();
 }
 const h = (fn) => (req, res, next) => fn(req, res).catch(next); // async 핸들러 래퍼
@@ -241,21 +249,48 @@ app.get("/admin", (req, res) => {
       try { adminHtml = fs.readFileSync(p, "utf8"); break; } catch {}
     }
   }
-  adminHtml ? res.type("html").send(adminHtml) : res.status(404).send("admin.html not found");
+  if (!adminHtml) return res.status(404).send("admin.html not found");
+  // no-store: 재배포해도 사파리가 예전 admin.html을 계속 쓰는 문제를 막는다
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.type("html").send(adminHtml.replace(/__BUILD__/g, BUILD));
+});
+
+// 진단용 — 인증도 DB도 타지 않는다. 로그인 실패 원인을 계층별로 분리하기 위한 엔드포인트.
+// 토큰 값 자체는 절대 응답에 넣지 않는다 (길이/일치 여부만).
+app.get("/admin/ping", (req, res) => {
+  const given = adminTokenOf(req);
+  res.set("Cache-Control", "no-store");
+  res.json({
+    ok: true, build: BUILD, node: process.version,
+    seen_path: req.path, seen_url: req.originalUrl, method: req.method,
+    on_vercel: !!process.env.VERCEL,
+    admin_token_configured: !!process.env.ADMIN_TOKEN,
+    admin_token_length: ADMIN_TOKEN.length,
+    given_length: given.length,
+    given_via: req.headers["x-admin-token"] ? "header"
+      : (req.query && req.query.token) ? "query"
+      : req.headers.authorization ? "authorization" : "none",
+    match: given === ADMIN_TOKEN,
+    db_ready: db.ready, db_driver: db.usePg ? "postgres" : "sqlite",
+  });
 });
 
 app.get("/admin/overview", admin, h(async (req, res) => {
-  const sales = await db.get("SELECT COALESCE(SUM(amount),0) AS s, COUNT(*) AS c FROM orders WHERE status='paid'");
-  const users = await db.get("SELECT COUNT(*) AS c FROM users");
-  const pend = await db.get("SELECT COUNT(*) AS c FROM shipments WHERE status!='shipped'");
-  const packs = [];
-  for (const p of await db.all("SELECT * FROM packs ORDER BY id")) {
-    packs.push({ ...p,
-      hits: await db.all("SELECT * FROM hits WHERE pack_id=? ORDER BY id", [p.id]),
-      pool: await db.all("SELECT * FROM point_pool WHERE pack_id=? ORDER BY id", [p.id]),
-      orders: Number((await db.get("SELECT COUNT(*) AS c FROM orders WHERE pack_id=?", [p.id])).c),
-    });
-  }
+  // 팩마다 쿼리를 돌리면(N+1) Neon 콜드스타트에서 Vercel 함수 타임아웃(10초)에 걸린다 → 전량 조회 후 메모리 그룹핑
+  const [sales, users, pend, packRows, hitRows, poolRows, orderCounts] = await Promise.all([
+    db.get("SELECT COALESCE(SUM(amount),0) AS s, COUNT(*) AS c FROM orders WHERE status='paid'"),
+    db.get("SELECT COUNT(*) AS c FROM users"),
+    db.get("SELECT COUNT(*) AS c FROM shipments WHERE status!='shipped'"),
+    db.all("SELECT * FROM packs ORDER BY id"),
+    db.all("SELECT * FROM hits ORDER BY id"),
+    db.all("SELECT * FROM point_pool ORDER BY id"),
+    db.all("SELECT pack_id, COUNT(*) AS c FROM orders GROUP BY pack_id"),
+  ]);
+  const by = (rows) => rows.reduce((m, r) => ((m[r.pack_id] = m[r.pack_id] || []).push(r), m), {});
+  const hitsBy = by(hitRows), poolBy = by(poolRows);
+  const ordBy = Object.fromEntries(orderCounts.map((r) => [r.pack_id, Number(r.c)]));
+  const packs = packRows.map((p) => ({ ...p,
+    hits: hitsBy[p.id] || [], pool: poolBy[p.id] || [], orders: ordBy[p.id] || 0 }));
   res.json({ sales_total: Number(sales.s), order_count: Number(sales.c), user_count: Number(users.c),
     pending_shipments: Number(pend.c), packs });
 }));
