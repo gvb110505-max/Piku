@@ -54,7 +54,7 @@ const listingOut = (l) => ({ ...l, images: parseImages(l.images) });
 
 // deps: { auth, admin, h, confirmPayment } — index.js에서 주입 (인증/결제 로직 중복 방지)
 function mount(app, deps) {
-  const { auth, admin, h, confirmPayment, assertPaymentAllowed } = deps;
+  const { auth, admin, h, confirmPayment, cancelPayment, assertPaymentAllowed } = deps;
 
   // ================= 공개 / 사용자 =================
 
@@ -178,8 +178,12 @@ function mount(app, deps) {
       res.json({ order_id: out, order_uid: uid, ...q, status: "paid",
         notice: "결제 대금은 검수 통과 시까지 Piku가 보관합니다." });
     } catch (e) {
-      // TODO 운영: 경합 실패 시 토스 결제 자동 취소 API 호출
-      res.status(409).json({ error: e.message });
+      // 결제는 승인됐는데 다른 구매자가 먼저 채간 경우 — 즉시 자동 취소
+      const rf = await cancelPayment({ kind: "market", orderRef: uid, pgKey: pay.key,
+        amount: q.buyer_total, reason: "구매 경합 실패 자동 환불" });
+      res.status(409).json({ error: e.message, refunded: rf.ok, refund_id: rf.refund_id,
+        message: rf.ok ? "다른 구매자가 먼저 구매해 결제가 자동 취소되었습니다."
+          : "결제 취소에 실패했습니다. 고객센터에서 확인 후 환불해드립니다." });
     }
   }));
 
@@ -436,18 +440,51 @@ function mount(app, deps) {
     res.json({ ok: true });
   }));
 
-  // 환불 확정 (불합격 건) — 실제 PG 취소는 TODO, 여기서는 상태만 확정한다
+  // 환불 확정 — PG 취소가 성공한 뒤에만 주문 상태를 바꾼다.
+  // 취소 실패인데 refunded로 적으면 돈은 안 나갔는데 장부만 맞는 상태가 되어 대사(對査)가 깨진다.
   app.post("/admin/market/orders/:id/refund", admin, h(async (req, res) => {
     const id = Number(req.params.id);
     const o = await db.get("SELECT * FROM market_orders WHERE id=?", [id]);
     if (!o) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
-    if (!["paid", "awaiting_inbound", "inbound", "inspecting", "failed"].includes(o.status))
-      return res.status(400).json({ error: "NOT_REFUNDABLE", status: o.status });
+    // 'passed'(검수 합격, 출고 전)도 환불 대상이다 — 출고 직전 취소·분실은 실제로 발생한다.
+    // 'shipped'/'completed'는 물건이 구매자에게 간 뒤라 반품 절차가 따로 필요하므로 여기서 막는다.
+    if (!["paid", "awaiting_inbound", "inbound", "inspecting", "passed", "failed"].includes(o.status))
+      return res.status(400).json({ error: "NOT_REFUNDABLE", status: o.status,
+        message: o.status === "shipped" || o.status === "completed"
+          ? "이미 구매자에게 발송된 건입니다. 반품 절차로 처리하세요." : undefined });
+
+    // 이미 정산이 진행된 건은 환불하면 이중 손실이 난다 — 정산을 먼저 보류시켜야 한다
+    const pay = await db.get("SELECT * FROM payouts WHERE order_id=? AND status IN ('approved','paid')", [id]);
+    if (pay) return res.status(409).json({ error: "PAYOUT_ALREADY_PROCESSED",
+      message: "이미 정산이 승인/지급된 건입니다. 정산을 보류로 되돌린 뒤 환불하세요.", payout_id: pay.id });
+
+    const rf = await cancelPayment({ kind: "market", orderId: id, orderRef: o.order_uid,
+      pgKey: o.pg_key, amount: o.buyer_total,
+      reason: req.body.reason || o.fail_reason || "검수 불합격 환불" });
+    if (!rf.ok)
+      return res.status(502).json({ error: "PG_CANCEL_FAILED", refund_id: rf.refund_id,
+        detail: rf.detail, message: "PG 취소에 실패해 주문 상태를 바꾸지 않았습니다. 환불 원장에서 재시도하세요." });
+
     await db.run("UPDATE market_orders SET status='refunded', updated_at=? WHERE id=?", [db.NOW(), id]);
     await db.run("UPDATE listings SET status='active', updated_at=? WHERE id=? AND status='sold'",
-      [db.NOW(), o.listing_id]); // 재판매 가능하도록 원복
-    // TODO 운영: 토스 결제취소 API 호출 (paymentKey = o.pg_key)
-    res.json({ ok: true, refund_amount: o.buyer_total, note: "PG 취소 연동 전에는 수동 환불이 필요합니다." });
+      [db.NOW(), o.listing_id]);                                    // 재판매 가능하도록 원복
+    await db.run("UPDATE payouts SET status='cancelled' WHERE order_id=? AND status='pending'", [id]);
+    res.json({ ok: true, refund_amount: o.buyer_total, refund_id: rf.refund_id, dev: !!rf.dev });
+  }));
+
+  // 실패한 환불 재시도 — PG 장애·일시 오류로 실패한 건을 관리자가 다시 시도한다
+  app.post("/admin/market/orders/:id/refund/retry", admin, h(async (req, res) => {
+    const id = Number(req.params.id);
+    const o = await db.get("SELECT * FROM market_orders WHERE id=?", [id]);
+    if (!o) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
+    if (o.status === "refunded") return res.json({ ok: true, already: true });
+    const rf = await cancelPayment({ kind: "market", orderId: id, orderRef: o.order_uid,
+      pgKey: o.pg_key, amount: o.buyer_total, reason: "환불 재시도" });
+    if (!rf.ok) return res.status(502).json({ error: "PG_CANCEL_FAILED", detail: rf.detail });
+    await db.run("UPDATE market_orders SET status='refunded', updated_at=? WHERE id=?", [db.NOW(), id]);
+    await db.run("UPDATE listings SET status='active', updated_at=? WHERE id=? AND status='sold'",
+      [db.NOW(), o.listing_id]);
+    res.json({ ok: true, refund_amount: o.buyer_total, refund_id: rf.refund_id });
   }));
 
   app.get("/admin/market/payouts", admin, h(async (req, res) => {
@@ -458,6 +495,7 @@ function mount(app, deps) {
   }));
 
   app.post("/admin/market/payouts/:id/:action", admin, h(async (req, res) => {
+    // cancel = 보류. 이미 승인/지급된 건도 보류로 되돌릴 수 있어야 환불 처리가 가능하다.
     const map = { approve: ["approved", "approved_at"], paid: ["paid", "paid_at"], cancel: ["cancelled", null] };
     const m = map[req.params.action];
     if (!m) return res.status(400).json({ error: "BAD_ACTION" });

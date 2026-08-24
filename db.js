@@ -225,6 +225,16 @@ CREATE TABLE IF NOT EXISTS inspections (
   reason TEXT, photos TEXT NOT NULL DEFAULT '[]', created_at TEXT
 );
 
+-- 환불 원장. PG 취소는 실패할 수 있으므로 시도를 반드시 기록하고, 성공한 뒤에만
+-- 주문 상태를 refunded로 바꾼다. pg_key 단위 중복 취소를 막는 역할도 겸한다.
+CREATE TABLE IF NOT EXISTS refunds (
+  id ${ID}, kind TEXT NOT NULL,              -- pack | market
+  order_id INTEGER, order_ref TEXT,
+  pg_key TEXT, amount INTEGER NOT NULL, reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',    -- pending | done | failed
+  pg_response TEXT, created_at TEXT, done_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS payouts (
   id ${ID}, order_id INTEGER NOT NULL, seller_id INTEGER NOT NULL,
   amount INTEGER NOT NULL,

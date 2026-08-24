@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
-const BUILD = "2026-08-24.6"; // 관리자 페이지 캐시 확인용 빌드 스탬프
+const BUILD = "2026-08-24.7"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
@@ -98,6 +98,42 @@ async function confirmPayment({ paymentKey, orderId, amount }) {
   });
   if (!r.ok) return { ok: false, detail: await r.text() };
   return { ok: true, key: paymentKey };
+}
+
+// 토스 결제 취소(환불). 시도는 항상 refunds 원장에 남기고, PG 취소가 성공한 경우에만 done이 된다.
+// 호출부는 반환값의 ok를 보고 주문 상태를 바꿔야 한다 — 실패했는데 환불 처리하면 돈이 안 나간 채 장부만 맞는다.
+async function cancelPayment({ kind, orderId, orderRef, pgKey, amount, reason }) {
+  const rid = await db.insert(
+    `INSERT INTO refunds (kind, order_id, order_ref, pg_key, amount, reason, created_at)
+     VALUES (?,?,?,?,?,?,?)`,
+    [kind, orderId || null, orderRef || null, pgKey || null, amount, reason || null, db.NOW()]);
+
+  // 개발 모드(시크릿 키 없음) 또는 개발용 결제키는 PG 호출 없이 성공 처리
+  if (!TOSS_SECRET_KEY || !pgKey || pgKey === "DEV") {
+    await db.run("UPDATE refunds SET status='done', pg_response=?, done_at=? WHERE id=?",
+      ["DEV_MODE", db.NOW(), rid]);
+    return { ok: true, refund_id: rid, dev: true };
+  }
+  try {
+    const r = await fetch(`https://api.tosspayments.com/v1/payments/${encodeURIComponent(pgKey)}/cancel`, {
+      method: "POST",
+      headers: { Authorization: "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64"),
+        "Content-Type": "application/json",
+        "Idempotency-Key": `refund-${kind}-${orderId || orderRef || rid}` },
+      body: JSON.stringify({ cancelReason: reason || "판매자 사유", cancelAmount: amount }),
+    });
+    const body = await r.text();
+    if (!r.ok) {
+      await db.run("UPDATE refunds SET status='failed', pg_response=? WHERE id=?", [body.slice(0, 1000), rid]);
+      return { ok: false, refund_id: rid, detail: body };
+    }
+    await db.run("UPDATE refunds SET status='done', pg_response=?, done_at=? WHERE id=?",
+      [body.slice(0, 1000), db.NOW(), rid]);
+    return { ok: true, refund_id: rid };
+  } catch (e) {
+    await db.run("UPDATE refunds SET status='failed', pg_response=? WHERE id=?", [String(e.message || e), rid]);
+    return { ok: false, refund_id: rid, detail: String(e.message || e) };
+  }
 }
 
 app.get(["/", "/health"], (req, res) => {
@@ -188,8 +224,13 @@ app.post("/purchase", auth, h(async (req, res) => {
     });
     res.json(out);
   } catch (e) {
-    // TODO 운영: SOLD_OUT 경합 시 자동 환불 API 호출
-    res.status(409).json({ error: e.message });
+    // 결제 승인 후 추첨이 실패한 경우 — 돈만 빠지고 상품이 없는 상태이므로 즉시 자동 환불
+    const rf = await cancelPayment({ kind: "pack", orderRef: orderId || null, pgKey: pay.key,
+      amount, reason: "추첨 실패 자동 환불: " + e.message });
+    res.status(409).json({ error: e.message,
+      refunded: rf.ok, refund_id: rf.refund_id,
+      message: rf.ok ? "결제가 자동으로 취소되었습니다."
+        : "결제 취소에 실패했습니다. 고객센터에서 확인 후 환불해드립니다." });
   }
 }));
 
@@ -267,7 +308,7 @@ app.get("/me", auth, h(async (req, res) => {
 }));
 
 // ---------- 마켓 (통신판매중개) ----------
-require("./market").mount(app, { auth, admin, h, confirmPayment, assertPaymentAllowed });
+require("./market").mount(app, { auth, admin, h, confirmPayment, cancelPayment, assertPaymentAllowed });
 
 // ---------- 관리자 ----------
 let adminHtml = null;
@@ -413,6 +454,10 @@ app.post("/admin/shipments/:id", admin, h(async (req, res) => {
       await db.run("UPDATE owned_cards SET status='shipped' WHERE id=?", [cid]);
   }
   res.json({ ok: true });
+}));
+
+app.get("/admin/refunds", admin, h(async (req, res) => {
+  res.json(await db.all("SELECT * FROM refunds ORDER BY (CASE WHEN status='failed' THEN 0 ELSE 1 END), id DESC LIMIT 200"));
 }));
 
 app.use((err, req, res, next) => {

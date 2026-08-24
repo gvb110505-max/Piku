@@ -376,7 +376,8 @@ function renderMarket(){
         h+='<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
           +'<div><b>'+esc(o.title)+'</b> <span class="muted">'+esc(o.order_uid)+'</span></div>'
           +'<div class="muted">사유: '+esc(o.fail_reason||'')+' · 환불액 '+num(o.buyer_total)+'원</div>'
-          +'<div class="row"><button class="warn" onclick="mkRefund('+o.id+')">환불 확정</button></div></div>';
+          +'<div class="row"><button class="warn" onclick="mkRefund('+o.id+')">환불 확정</button>'
+          +'<button class="ghost" onclick="mkRefundRetry('+o.id+')">환불 재시도</button></div></div>';
       });
       h+='</div>';
     }
@@ -440,15 +441,21 @@ function mkShip(id){
     .then(function(){toast('발송 처리됨');renderMarket();}).catch(function(e){toast(e.message);});
 }
 function mkRefund(id){
-  if(!confirm('환불을 확정합니다. PG 취소는 별도로 진행해야 합니다.')) return;
+  if(!confirm('구매자에게 전액 환불합니다. 토스 결제 취소가 실제로 실행됩니다.')) return;
   api('/admin/market/orders/'+id+'/refund',{})
-    .then(function(r){toast('환불 확정 '+num(r.refund_amount)+'원');renderMarket();}).catch(function(e){toast(e.message);});
+    .then(function(r){toast('환불 완료 '+num(r.refund_amount)+'원');renderMarket();})
+    .catch(function(e){toast(e.message);});
+}
+function mkRefundRetry(id){
+  api('/admin/market/orders/'+id+'/refund/retry',{})
+    .then(function(r){toast(r.already?'이미 환불된 건입니다':'재시도 성공 '+num(r.refund_amount)+'원');renderMarket();})
+    .catch(function(e){toast(e.message);});
 }
 
 // ==================== 정산 · 정책 ====================
 function renderSettle(){
-  Promise.all([api('/admin/market/payouts'),api('/admin/market/overview')]).then(function(r){
-    var ps=r[0],ov=r[1],st=ov.settings;
+  Promise.all([api('/admin/market/payouts'),api('/admin/market/overview'),api('/admin/refunds')]).then(function(r){
+    var ps=r[0],ov=r[1],st=ov.settings,rfs=r[2];
     var h='<div class="card"><h3>수수료 정책</h3>'
       +'<p class="muted" style="margin-top:6px">변경해도 기존 주문의 수수료는 바뀌지 않습니다(주문 시점 값 고정).</p>'
       +'<div class="row"><label class="muted">판매 수수료</label>'
@@ -476,6 +483,22 @@ function renderSettle(){
         +'<button class="warn" onclick="payoutAct('+p.id+',\'cancel\')">보류</button></div></div>';
     });
     h+='</div>';
+
+    // 실패한 환불은 돈이 안 나간 상태라 가장 먼저 눈에 띄어야 한다
+    var rfFail=rfs.filter(function(x){return x.status==='failed';});
+    h+='<div class="card"><h3>환불 원장 '
+      +(rfFail.length?'<span class="pill off">실패 '+rfFail.length+'건</span>':'<span class="pill on">정상</span>')+'</h3>';
+    if(rfFail.length) h+='<p class="muted" style="margin-top:6px;color:#FF7A7A">'
+      +'PG 취소가 실패한 건입니다. 실제 환불이 나가지 않았으니 마켓 검수 탭에서 재시도하세요.</p>';
+    h+='<table><tr><th>#</th><th>구분</th><th>주문</th><th>금액</th><th>상태</th><th>사유</th></tr>';
+    rfs.forEach(function(x){
+      h+='<tr><td>'+x.id+'</td><td>'+(x.kind==='pack'?'랜덤팩':'마켓')+'</td>'
+        +'<td class="muted">'+esc(x.order_ref||('#'+(x.order_id||'-')))+'</td>'
+        +'<td>'+num(x.amount)+'원</td>'
+        +'<td>'+({pending:'진행중',done:'환불 완료',failed:'실패'}[x.status]||x.status)+'</td>'
+        +'<td class="muted">'+esc(x.reason||'')+'</td></tr>';
+    });
+    h+='</table></div>';
 
     h+='<div class="card"><h3>정산 내역</h3><table><tr><th>#</th><th>판매자</th><th>금액</th><th>상태</th><th>지급일</th></tr>';
     ps.forEach(function(p){
