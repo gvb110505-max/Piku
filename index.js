@@ -9,6 +9,14 @@ const db = require("./db");
 const { getOdds, draw } = require("./gacha");
 
 const app = express();
+// 예전 배포 구조(api/[...path].js)로 들어오던 /api 접두사를 흡수한다.
+// 이제 모든 요청이 이 파일 하나로 들어오므로 라우팅은 전부 Express가 담당한다.
+app.use((req, res, next) => {
+  if (req.url === "/api" || req.url === "/api/") req.url = "/";
+  else if (req.url.startsWith("/api/")) req.url = req.url.slice(4);
+  else if (req.url.startsWith("/api?")) req.url = "/" + req.url.slice(4);
+  next();
+});
 app.use(express.json());
 // DB 미설정이면 500 크래시 대신 원인을 알려준다
 app.use((req, res, next) => {
@@ -23,7 +31,7 @@ app.use((req, res, next) => {
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
-const BUILD = "2026-08-24.3"; // 관리자 페이지 캐시 확인용 빌드 스탬프
+const BUILD = "2026-08-24.4"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
@@ -63,7 +71,7 @@ async function todaySpent(userId) {
   return Number(r.s);
 }
 
-app.get("/health", (req, res) => {
+app.get(["/", "/health"], (req, res) => {
   if (!db.ready) return res.status(503).json({ ok: false, configured: false,
     message: "DATABASE_URL이 설정되지 않았습니다. Vercel → Storage에서 Postgres를 연결한 뒤 재배포하세요." });
   res.json({ ok: true, configured: true, driver: db.usePg ? "postgres" : "sqlite",
