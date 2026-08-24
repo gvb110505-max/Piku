@@ -16,11 +16,14 @@ function check(label, ok, extra) {
   else { fail++; console.log(`✗ ${label}`, extra != null ? JSON.stringify(extra) : ""); }
 }
 
+// 생년월일은 가입이 아니라 본인확인(/identity/dev-verify)에서만 들어간다
 async function signup(phone, nick, birth) {
   const U = { "Content-Type": "application/json" };
   const { dev_code } = await post("/auth/request-code", { phone }, U);
-  const v = await post("/auth/verify", { phone, code: dev_code, nickname: nick, birth }, U);
-  return { token: v.token, id: v.user.id, H: { "Content-Type": "application/json", Authorization: v.token } };
+  const v = await post("/auth/verify", { phone, code: dev_code, nickname: nick }, U);
+  const H = { "Content-Type": "application/json", Authorization: v.token };
+  if (birth) await post("/identity/dev-verify", { birth }, H);
+  return { token: v.token, id: v.user.id, H };
 }
 
 (async () => {

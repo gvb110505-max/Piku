@@ -40,8 +40,11 @@ async function signup(phone, nick) {
   const U = { "Content-Type": "application/json" };
   await post("/auth/request-code", { phone }, U);
   const row = await db.get("SELECT code FROM phone_codes WHERE phone=?", [phone]);
-  const v = await post("/auth/verify", { phone, code: row.code, nickname: nick, birth: "19900101" }, U);
-  return { id: v.user.id, H: { "Content-Type": "application/json", Authorization: v.token } };
+  const v = await post("/auth/verify", { phone, code: row.code, nickname: nick }, U);
+  const H = { "Content-Type": "application/json", Authorization: v.token };
+  // PG 연동 모드라 dev 본인확인이 닫혀 있으므로 관리자 경로로 성인 인증을 등록한다
+  await post(`/admin/users/${v.user.id}/verify`, { birth: "19900101", memo: "테스트" });
+  return { id: v.user.id, H };
 }
 
 (async () => {

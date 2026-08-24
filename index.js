@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
-const BUILD = "2026-08-24.7"; // 관리자 페이지 캐시 확인용 빌드 스탬프
+const BUILD = "2026-08-24.8"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
@@ -66,6 +66,29 @@ function isMinor(birth) {
 }
 // 오늘 결제액 — 랜덤팩(orders)과 마켓 구매(market_orders)를 합산한다.
 // 합산하지 않으면 마켓이 미성년자 한도 우회 경로가 된다.
+const PASS_CONFIGURED = !!(process.env.PASS_CLIENT_ID && process.env.PASS_CLIENT_SECRET);
+// 개발용 자가 본인확인은 PG도 PASS도 붙지 않은 로컬 환경에서만 열린다.
+// 운영에서는 TOSS_SECRET_KEY가 설정되므로 자동으로 닫힌다.
+const ALLOW_DEV_IDENTITY = process.env.ALLOW_DEV_IDENTITY === "1"
+  || (process.env.ALLOW_DEV_IDENTITY !== "0" && !TOSS_SECRET_KEY && !PASS_CONFIGURED);
+
+async function identityRequired() {
+  const r = await db.get("SELECT value FROM settings WHERE key='identity_required'");
+  return String(r ? r.value : "0") === "1";
+}
+
+// 나이 판정. 인증 기록이 있으면 그 생년월일만 쓴다.
+// 미인증이면 — 강제 모드에서는 미성년자로 간주(보수적), 유예 모드에서는 기존 저장값을 인정한다.
+async function ageStatus(userId) {
+  const v = await db.get(
+    "SELECT birth, provider, verified_at FROM identity_verifications WHERE user_id=? ORDER BY id DESC LIMIT 1",
+    [userId]);
+  if (v) return { verified: true, provider: v.provider, verified_at: v.verified_at, is_minor: isMinor(v.birth) };
+  if (await identityRequired()) return { verified: false, is_minor: true, reason: "IDENTITY_REQUIRED" };
+  const u = await db.get("SELECT birth FROM users WHERE id=?", [userId]);
+  return { verified: false, is_minor: isMinor(u && u.birth), legacy: true };
+}
+
 async function todaySpent(userId) {
   const [pack, market] = await Promise.all([
     db.get("SELECT COALESCE(SUM(amount),0) AS s FROM orders WHERE user_id=? AND status='paid' AND substr(created_at,1,10)=?",
@@ -79,12 +102,15 @@ async function todaySpent(userId) {
 
 // 결제 전 한도 검사. 차단해야 하면 응답 바디를 돌려주고, 통과면 null.
 async function assertPaymentAllowed(userId, amount) {
-  const u = await db.get("SELECT birth FROM users WHERE id=?", [userId]);
-  if (!isMinor(u.birth)) return null;
+  const age = await ageStatus(userId);
+  if (!age.is_minor) return null;
   const spent = await todaySpent(userId);
   if (spent + amount <= MINOR_DAILY_LIMIT) return null;
   return { error: "DAILY_LIMIT_MINOR", limit: MINOR_DAILY_LIMIT, spent,
-    remaining: Math.max(0, MINOR_DAILY_LIMIT - spent) };
+    remaining: Math.max(0, MINOR_DAILY_LIMIT - spent),
+    verified: age.verified,
+    message: age.verified ? "만 19세 미만은 하루 10만원까지 결제할 수 있습니다."
+      : "본인확인을 완료해야 결제 한도가 해제됩니다." };
 }
 
 // 토스 결제 승인. 시크릿 키가 없으면 개발 모드로 통과시킨다.
@@ -157,28 +183,69 @@ app.post("/auth/request-code", h(async (req, res) => {
 }));
 
 app.post("/auth/verify", h(async (req, res) => {
-  const { phone, code, nickname, birth } = req.body;
+  const { phone, code, nickname } = req.body;
   const row = await db.get("SELECT * FROM phone_codes WHERE phone=?", [phone]);
   if (!row || row.code !== code || Number(row.expires_at) < Date.now())
     return res.status(400).json({ error: "INVALID_CODE" });
-  if (!/^(19|20)\d{6}$/.test(birth || ""))
-    return res.status(400).json({ error: "INVALID_BIRTH" });
+  // 생년월일은 더 이상 클라이언트에서 받지 않는다. 자기 입력을 믿으면 미성년자 한도가 그대로 뚫린다.
+  // 신규 가입자는 birth=NULL로 시작해 미성년자 한도가 적용되고, 본인확인을 마쳐야 해제된다.
   await db.run("DELETE FROM phone_codes WHERE phone=?", [phone]);
 
   let user = await db.get("SELECT * FROM users WHERE phone=?", [phone]); // 전화번호 = 중복가입 방지 키
   let isNew = false;
   if (!user) {
     isNew = true;
-    const id = await db.insert("INSERT INTO users (phone, nickname, birth, points, created_at) VALUES (?,?,?,1000,?)",
-      [phone, nickname || "트레이너", birth, db.NOW()]);
+    const id = await db.insert("INSERT INTO users (phone, nickname, birth, points, created_at) VALUES (?,?,NULL,1000,?)",
+      [phone, nickname || "트레이너", db.NOW()]);
     await db.run("INSERT INTO point_logs (user_id, delta, reason, created_at) VALUES (?,1000,'신규가입 보너스',?)", [id, db.NOW()]);
     user = await db.get("SELECT * FROM users WHERE id=?", [id]);
   }
   const token = crypto.randomBytes(24).toString("hex");
   await db.run("INSERT INTO tokens (token, user_id, created_at) VALUES (?,?,?)", [token, user.id, db.NOW()]);
+  const age = await ageStatus(user.id);
   res.json({ token, is_new: isNew, user: { id: user.id, nickname: user.nickname, points: user.points,
-    welcome_used: !!user.welcome_used, is_minor: isMinor(user.birth) } });
+    welcome_used: !!user.welcome_used, is_minor: age.is_minor, identity_verified: age.verified } });
 }));
+
+// ---------- 본인확인 (PASS) ----------
+// 생년월일의 유일한 신뢰 출처. 클라이언트 자기 입력은 어떤 경로로도 받지 않는다.
+app.get("/identity/status", auth, h(async (req, res) => {
+  const age = await ageStatus(req.userId);
+  res.json({ ...age, daily_limit: age.is_minor ? MINOR_DAILY_LIMIT : null,
+    provider_ready: PASS_CONFIGURED, dev_mode: ALLOW_DEV_IDENTITY });
+}));
+
+// PASS 연동 지점. 계약·심사 완료 후 이 두 핸들러만 채우면 된다.
+app.post("/identity/pass/start", auth, h(async (req, res) => {
+  if (!PASS_CONFIGURED) return res.status(503).json({ error: "PASS_NOT_CONFIGURED",
+    message: "PASS 본인확인이 아직 연동되지 않았습니다.",
+    todo: "PASS_CLIENT_ID / PASS_CLIENT_SECRET 환경변수 설정 후 이 핸들러에 인증 요청 생성 로직을 넣으세요." });
+  res.status(501).json({ error: "NOT_IMPLEMENTED" });
+}));
+app.post("/identity/pass/callback", h(async (req, res) => {
+  if (!PASS_CONFIGURED) return res.status(503).json({ error: "PASS_NOT_CONFIGURED" });
+  // TODO: PASS 응답 서명 검증 → recordVerification(userId, {provider:'pass', ci, di, name, birth, gender})
+  res.status(501).json({ error: "NOT_IMPLEMENTED" });
+}));
+
+// 개발 전용 — 운영(TOSS 키 또는 PASS 설정)에서는 자동으로 닫힌다
+app.post("/identity/dev-verify", auth, h(async (req, res) => {
+  if (!ALLOW_DEV_IDENTITY) return res.status(403).json({ error: "DEV_IDENTITY_DISABLED" });
+  const { birth, name } = req.body;
+  if (!/^(19|20)\d{6}$/.test(birth || "")) return res.status(400).json({ error: "INVALID_BIRTH" });
+  await recordVerification(req.userId, { provider: "dev", birth, name: name || null });
+  res.json({ ok: true, ...(await ageStatus(req.userId)) });
+}));
+
+async function recordVerification(userId, v) {
+  await db.run(
+    `INSERT INTO identity_verifications (user_id, provider, ci, di, name, birth, gender, phone, verified_at, memo, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [userId, v.provider, v.ci || null, v.di || null, v.name || null, v.birth, v.gender || null,
+     v.phone || null, db.NOW(), v.memo || null, db.NOW()]);
+  // users.birth는 표시용 캐시로만 갱신한다. 판정은 항상 identity_verifications를 본다.
+  await db.run("UPDATE users SET birth=? WHERE id=?", [v.birth, userId]);
+}
 
 // ---------- 팩 / 확률 ----------
 const viewers = new Map(); // "N명이 함께 보고 있어요" — 인스턴스별 근사치 (5분 창)
@@ -297,10 +364,13 @@ app.get("/me", auth, h(async (req, res) => {
   const orders = await db.all(
     "SELECT o.*, p.name AS pack_name FROM orders o JOIN packs p ON p.id=o.pack_id WHERE o.user_id=? ORDER BY o.id DESC LIMIT 50",
     [req.userId]);
-  const minor = isMinor(user.birth);
+  const age = await ageStatus(req.userId);
+  const minor = age.is_minor;
   const spent = await todaySpent(req.userId);
   res.json({
-    user: { id: user.id, nickname: user.nickname, points: user.points, welcome_used: user.welcome_used, is_minor: minor },
+    user: { id: user.id, nickname: user.nickname, points: user.points, welcome_used: user.welcome_used,
+      is_minor: minor, identity_verified: age.verified },
+    identity: age,
     limit: { is_minor: minor, daily_limit: minor ? MINOR_DAILY_LIMIT : null,
       today_spent: spent, remaining: minor ? Math.max(0, MINOR_DAILY_LIMIT - spent) : null },
     cards, point_logs: logs, shipments, orders,
@@ -440,7 +510,9 @@ app.get("/admin/users", admin, h(async (req, res) => {
   res.json(await db.all(`
     SELECT u.id, u.nickname, u.phone, u.points, u.welcome_used, u.created_at,
       (SELECT COUNT(*) FROM orders o WHERE o.user_id=u.id) AS order_count,
-      (SELECT COALESCE(SUM(amount),0) FROM orders o WHERE o.user_id=u.id) AS spent
+      (SELECT COALESCE(SUM(amount),0) FROM orders o WHERE o.user_id=u.id) AS spent,
+      (SELECT provider FROM identity_verifications v WHERE v.user_id=u.id ORDER BY v.id DESC LIMIT 1) AS verified_by,
+      u.birth
     FROM users u ORDER BY u.id DESC LIMIT 200`));
 }));
 app.post("/admin/shipments/:id", admin, h(async (req, res) => {
@@ -454,6 +526,17 @@ app.post("/admin/shipments/:id", admin, h(async (req, res) => {
       await db.run("UPDATE owned_cards SET status='shipped' WHERE id=?", [cid]);
   }
   res.json({ ok: true });
+}));
+
+// 오프라인 신분증 확인 등으로 관리자가 직접 본인확인을 등록한다.
+app.post("/admin/users/:id/verify", admin, h(async (req, res) => {
+  const { birth, name, memo } = req.body;
+  if (!/^(19|20)\d{6}$/.test(birth || "")) return res.status(400).json({ error: "INVALID_BIRTH" });
+  const u = await db.get("SELECT id FROM users WHERE id=?", [Number(req.params.id)]);
+  if (!u) return res.status(404).json({ error: "USER_NOT_FOUND" });
+  await recordVerification(u.id, { provider: "admin_manual", birth, name: name || null,
+    memo: memo || "관리자 수동 확인" });
+  res.json({ ok: true, ...(await ageStatus(u.id)) });
 }));
 
 app.get("/admin/refunds", admin, h(async (req, res) => {

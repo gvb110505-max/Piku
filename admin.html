@@ -262,6 +262,15 @@ function addPool(pid){
 }
 function delPool(id){ api('/admin/pool/'+id+'/delete',{}).then(function(){toast('삭제됨');renderPacks();}).catch(function(e){toast(e.message);}); }
 
+function verifyUser(id){
+  var b=clean(document.getElementById('vb_'+id).value);
+  if(!/^(19|20)\d{6}$/.test(b)) return toast('생년월일 8자리를 입력하세요 (예: 19900101)');
+  if(!confirm('신분증 등으로 실제 확인한 생년월일만 등록하세요. 결제 한도 판정에 그대로 쓰입니다.')) return;
+  api('/admin/users/'+id+'/verify',{birth:b,memo:'관리자 수동 확인'})
+    .then(function(r){toast(r.is_minor?'등록됨 (미성년자)':'등록됨 (성인)');renderOrders();})
+    .catch(function(e){toast(e.message);});
+}
+
 function renderShip(){
   api('/admin/shipments').then(function(rows){
     var label={requested:'신청 접수',preparing:'준비 중',shipped:'발송 완료'};
@@ -291,9 +300,19 @@ function renderOrders(){
     orders.forEach(function(o){
       h+='<tr><td>'+o.id+'</td><td>'+esc(o.nickname)+'</td><td>'+esc(o.pack_name)+'</td><td>'+num(o.amount)+'원</td><td>'+esc(o.method)+'</td></tr>';
     });
-    h+='</table></div><div class="card"><h3>유저</h3><table><tr><th>#</th><th>닉네임</th><th>전화</th><th>포인트</th><th>주문</th><th>누적 결제</th></tr>';
+    var unver=users.filter(function(u){return !u.verified_by;}).length;
+    h+='</table></div><div class="card"><h3>유저 '
+      +'<span class="pill '+(unver?'off':'on')+'">본인확인 미완료 '+unver+'명</span></h3>'
+      +'<p class="muted" style="margin-top:6px">본인확인이 없으면 생년월일을 신뢰할 수 없어 미성년자 한도(10만원/일)가 적용됩니다.</p>'
+      +'<table><tr><th>#</th><th>닉네임</th><th>전화</th><th>본인확인</th><th>포인트</th><th>누적 결제</th><th></th></tr>';
     users.forEach(function(u){
-      h+='<tr><td>'+u.id+'</td><td>'+esc(u.nickname)+'</td><td class="muted">'+esc(u.phone)+'</td><td>'+num(u.points)+'P</td><td>'+u.order_count+'</td><td>'+num(u.spent)+'원</td></tr>';
+      var vlabel={pass:'PASS',admin_manual:'관리자 확인',dev:'개발'}[u.verified_by]||null;
+      h+='<tr><td>'+u.id+'</td><td>'+esc(u.nickname)+'</td><td class="muted">'+esc(u.phone)+'</td>'
+        +'<td>'+(vlabel?'<span class="pill on">'+vlabel+' '+esc(u.birth||'')+'</span>'
+                      :'<span class="pill off">미완료</span>')+'</td>'
+        +'<td>'+num(u.points)+'P</td><td>'+num(u.spent)+'원</td>'
+        +'<td><input class="sm" id="vb_'+u.id+'" placeholder="19900101" style="width:90px">'
+        +'<button class="ghost" onclick="verifyUser('+u.id+')">인증 등록</button></td></tr>';
     });
     h+='</table></div>';
     $('#view').innerHTML=h;
@@ -464,6 +483,13 @@ function renderSettle(){
       +'<input class="sm" id="set_insp" type="number" value="'+st.inspection_fee+'"> 원</div>'
       +'<div class="row"><label class="muted">배송비(구매자)</label>'
       +'<input class="sm" id="set_ship" type="number" value="'+st.shipping_fee+'"> 원</div>'
+      +'</div><div class="card"><h3>본인확인 정책</h3>'
+      +'<p class="muted" style="margin-top:6px">강제로 켜면 본인확인을 마치지 않은 유저는 전원 미성년자 한도가 적용됩니다. '
+      +'기존 가입자도 즉시 제한되므로 PASS 연동 후 켜세요.</p>'
+      +'<div class="row"><span class="pill '+(st.identity_required?'off':'on')+'">'
+      +(st.identity_required?'강제 (미인증자 제한)':'유예 (기존 저장값 인정)')+'</span>'
+      +'<button class="ghost" onclick="setIdentity('+(st.identity_required?0:1)+')">'
+      +(st.identity_required?'유예로 전환':'강제로 전환')+'</button></div>'
       +'<div class="row"><button onclick="saveSettings()">정책 저장</button>'
       +'<button class="ghost" onclick="toggleMarket('+(st.enabled?0:1)+')">'
       +(st.enabled?'마켓 판매 중단':'마켓 판매 재개')+'</button>'
@@ -516,6 +542,11 @@ function saveSettings(){
     market_inspection_fee:document.getElementById('set_insp').value,
     market_shipping_fee:document.getElementById('set_ship').value
   }).then(function(){toast('정책 저장됨');renderSettle();}).catch(function(e){toast(e.message);});
+}
+function setIdentity(on){
+  if(on&&!confirm('본인확인을 마치지 않은 기존 유저 전원에게 미성년자 한도(10만원/일)가 즉시 적용됩니다. 진행할까요?')) return;
+  api('/admin/settings',{identity_required:String(on)})
+    .then(function(){toast(on?'본인확인 강제 적용':'유예 모드로 전환');renderSettle();}).catch(function(e){toast(e.message);});
 }
 function toggleMarket(on){
   api('/admin/settings',{market_enabled:String(on)})

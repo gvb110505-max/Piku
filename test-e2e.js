@@ -16,13 +16,13 @@ const j = (r) => r.json();
 
   // 1) 가입 + 1000P
   const { dev_code } = await post("/auth/request-code", { phone: "01012345678" });
-  const v = await post("/auth/verify", { phone: "01012345678", code: dev_code, nickname: "세현", birth: "20110315" });
+  const v = await post("/auth/verify", { phone: "01012345678", code: dev_code, nickname: "세현" });
   console.log("1. 가입:", v.is_new, "| 포인트:", v.user.points);
   const T = v.token;
 
   // 2) 중복가입 방지 (같은 번호 재인증 → 기존 계정)
   const { dev_code: c2 } = await post("/auth/request-code", { phone: "01012345678" });
-  const v2 = await post("/auth/verify", { phone: "01012345678", code: c2, birth: "20110315" });
+  const v2 = await post("/auth/verify", { phone: "01012345678", code: c2 });
   console.log("2. 중복가입 방지:", v2.is_new === false ? "OK(기존계정 로그인)" : "FAIL");
 
   // 3) 웰컴팩 1회 + 2회차 거부
@@ -76,7 +76,9 @@ const j = (r) => r.json();
 
   // 12) 성인은 한도 없음
   const { dev_code: ca } = await post("/auth/request-code", { phone: "01055556666" });
-  const va = await post("/auth/verify", { phone: "01055556666", code: ca, nickname: "성인", birth: "19900101" });
+  const va = await post("/auth/verify", { phone: "01055556666", code: ca, nickname: "성인" });
+  // 생년월일은 가입이 아니라 본인확인에서만 받는다 (자기 입력 차단)
+  await post("/identity/dev-verify", { birth: "19900101" }, va.token);
   const meA = await fetch(B + "/me", { headers: { Authorization: va.token } }).then(j);
   console.log("12. 성인 한도:", meA.limit.daily_limit === null ? "무제한 OK" : "FAIL");
 
@@ -89,6 +91,6 @@ const j = (r) => r.json();
   }
   console.log("13. GUARANTEED:", bonus ? `OK (#${bonus.draw_no}번째 → ${bonus.bonus.name})` : "FAIL");
 
-  console.log("\n== E2E 전체 통과 ==");
+  console.log("\n== E2E 완료 ==");
   process.exit(0);
 })().catch((e) => { console.error("E2E FAIL:", e); process.exit(1); });

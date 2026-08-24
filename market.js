@@ -32,6 +32,7 @@ async function getSettings() {
     inspection_fee: Number(s.market_inspection_fee ?? 0),
     shipping_fee: Number(s.market_shipping_fee ?? 3500),
     enabled: String(s.market_enabled ?? "1") === "1",
+    identity_required: String(s.identity_required ?? "0") === "1",
   };
 }
 
@@ -513,7 +514,8 @@ function mount(app, deps) {
     res.json(await db.all("SELECT * FROM settings ORDER BY key"));
   }));
   app.post("/admin/settings", admin, h(async (req, res) => {
-    const allowed = ["market_fee_rate", "market_inspection_fee", "market_shipping_fee", "market_enabled"];
+    const allowed = ["market_fee_rate", "market_inspection_fee", "market_shipping_fee",
+      "market_enabled", "identity_required"];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: "NO_FIELDS" });
     for (const [k, v] of updates) {

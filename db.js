@@ -225,6 +225,16 @@ CREATE TABLE IF NOT EXISTS inspections (
   reason TEXT, photos TEXT NOT NULL DEFAULT '[]', created_at TEXT
 );
 
+-- 본인확인 결과. 생년월일의 유일한 신뢰 출처(single source of truth)다.
+-- users.birth는 가입 시 자기 입력값이라 신뢰하지 않는다 — 여기에 행이 있어야 "인증된 나이"다.
+-- ci/di는 통신사 본인확인의 연계정보. 중복가입 판별과 재인증 대조에 쓴다.
+CREATE TABLE IF NOT EXISTS identity_verifications (
+  id ${ID}, user_id INTEGER NOT NULL,
+  provider TEXT NOT NULL,                    -- pass | admin_manual | dev
+  ci TEXT, di TEXT, name TEXT, birth TEXT, gender TEXT, phone TEXT,
+  verified_at TEXT NOT NULL, memo TEXT, created_at TEXT
+);
+
 -- 환불 원장. PG 취소는 실패할 수 있으므로 시도를 반드시 기록하고, 성공한 뒤에만
 -- 주문 상태를 refunded로 바꾼다. pg_key 단위 중복 취소를 막는 역할도 겸한다.
 CREATE TABLE IF NOT EXISTS refunds (
@@ -250,6 +260,9 @@ const MARKET_DEFAULTS = {
   market_inspection_fee: "0",     // 검수비 무료
   market_shipping_fee: "3500",    // 검수센터 → 구매자 배송비 (구매자 부담)
   market_enabled: "1",
+  // 0 = 유예. 기존 가입자는 저장된 생년월일을 그대로 인정한다(서비스 중단 방지).
+  // 1 = 강제. 본인확인을 마친 유저만 성인으로 취급하고, 미인증자는 전원 미성년자 한도가 적용된다.
+  identity_required: "0",
 };
 
 async function seed() {

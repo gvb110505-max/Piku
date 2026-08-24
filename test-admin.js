@@ -13,7 +13,7 @@ const get = (p, h) => fetch(B + p, { headers: h || A }).then(r => r.json());
   // 활동 데이터 생성 (유저 가입 + 구매 + 배송)
   const U = { "Content-Type": "application/json" };
   const { dev_code } = await post("/auth/request-code", { phone: "01099998888" }, U);
-  const v = await post("/auth/verify", { phone: "01099998888", code: dev_code, nickname: "테스터", birth: "19900101" }, U);
+  const v = await post("/auth/verify", { phone: "01099998888", code: dev_code, nickname: "테스터" }, U);
   const T = { "Content-Type": "application/json", Authorization: v.token };
   const p1 = await post("/purchase", { pack_id: 1, method: "toss", orderId: "A1", amount: 5000, paymentKey: "T" }, T);
   await post("/shipments", { card_ids: [p1.result.card_id], address: "서울 어딘가 1" }, T);
