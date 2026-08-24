@@ -58,6 +58,8 @@
     <div class="tab" data-t="packs" onclick="go('packs')">팩·상품</div>
     <div class="tab" data-t="ship" onclick="go('ship')">배송</div>
     <div class="tab" data-t="orders" onclick="go('orders')">주문·유저</div>
+    <div class="tab" data-t="market" onclick="go('market')">마켓 검수</div>
+    <div class="tab" data-t="settle" onclick="go('settle')">정산·정책</div>
   </div>
   <div id="view"></div>
 </div>
@@ -168,7 +170,7 @@ function boot(){
 function go(t){
   var tabs=document.querySelectorAll('.tab');
   for(var i=0;i<tabs.length;i++) tabs[i].classList.toggle('on',tabs[i].dataset.t===t);
-  ({dash:renderDash,packs:renderPacks,ship:renderShip,orders:renderOrders})[t]();
+  ({dash:renderDash,packs:renderPacks,ship:renderShip,orders:renderOrders,market:renderMarket,settle:renderSettle})[t]();
 }
 
 function renderDash(){
@@ -296,6 +298,205 @@ function renderOrders(){
     h+='</table></div>';
     $('#view').innerHTML=h;
   }).catch(function(e){ toast(e.message); });
+}
+
+// ==================== 마켓 (통신판매중개 / 검수) ====================
+var MK_STATUS={paid:'결제완료·에스크로',awaiting_inbound:'입고 대기',inbound:'입고됨',
+  inspecting:'검수 중',passed:'검수 합격',failed:'검수 불합격',shipped:'구매자 발송',
+  completed:'거래 완료',refunded:'환불 완료'};
+var IN_STATUS={requested:'수거 신청',picked_up:'수거됨',received:'입고 완료',
+  unmatched:'미매칭',discarded:'폐기'};
+var MK_ORDERS=[]; // 미매칭 매칭용 후보 캐시
+
+function renderMarket(){
+  Promise.all([api('/admin/market/overview'),api('/admin/market/inbound'),api('/admin/market/orders')])
+  .then(function(r){
+    var ov=r[0],inb=r[1],orders=r[2];
+    MK_ORDERS=orders;
+
+    var h='<div class="grid">'
+      +'<div class="stat"><div class="muted">거래액(GMV)</div><div class="v">'+num(ov.gmv)+'원</div></div>'
+      +'<div class="stat"><div class="muted">수수료 수익</div><div class="v">'+num(ov.fee_revenue)+'원</div></div>'
+      +'<div class="stat"><div class="muted">판매중 상품</div><div class="v">'+num(ov.active_listings)+'</div></div>'
+      +'<div class="stat"><div class="muted">미매칭 입고</div><div class="v">'+num(ov.unmatched_inbound)+'</div></div></div>';
+
+    // --- 입고 스캔 ---
+    h+='<div class="card"><h3>입고 스캔</h3>'
+      +'<p class="muted" style="margin-top:6px">박스에 적힌 접수번호(PK____) 또는 판매자 Piku 아이디·닉네임·전화번호를 입력하세요.</p>'
+      +'<div class="row"><input id="mk_code" placeholder="예: PKA3D7XQ 또는 판매왕" style="flex:1;min-width:200px" '
+      +'autocapitalize="characters" autocorrect="off" spellcheck="false">'
+      +'<button onclick="mkReceive()">입고 처리</button></div>'
+      +'<div id="mk_scan_result"></div></div>';
+
+    // --- 미매칭 입고함 ---
+    var un=inb.filter(function(i){return i.status==='unmatched';});
+    h+='<div class="card"><h3>미매칭 입고함 <span class="pill '+(un.length?'off':'on')+'">'+un.length+'건</span></h3>';
+    if(!un.length) h+='<p class="muted" style="margin-top:6px">아이디를 알아볼 수 없는 박스가 없습니다.</p>';
+    un.forEach(function(i){
+      h+='<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
+        +'<div>박스 표기: <b>'+esc(i.inbound_code||'(없음)')+'</b> <span class="muted">'+esc(i.received_at||'')+'</span></div>'
+        +'<div class="row"><select id="mk_match_'+i.id+'">'+mkOrderOptions()+'</select>'
+        +'<button onclick="mkMatch('+i.id+')">이 주문에 매칭</button></div></div>';
+    });
+    h+='</div>';
+
+    // --- 검수 대기 ---
+    var insp=orders.filter(function(o){return o.status==='inbound'||o.status==='inspecting';});
+    h+='<div class="card"><h3>검수 대기 <span class="pill '+(insp.length?'off':'on')+'">'+insp.length+'건</span></h3>';
+    if(!insp.length) h+='<p class="muted" style="margin-top:6px">검수 대기 건이 없습니다.</p>';
+    insp.forEach(function(o){
+      h+='<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
+        +'<div><b>'+esc(o.title)+'</b> <span class="muted">'+esc(o.order_uid)+'</span></div>'
+        +'<div class="muted">판매 '+esc(o.seller_nickname)+' → 구매 '+esc(o.buyer_nickname)
+        +' · 거래가 '+num(o.item_price)+'원 · 정산 예정 '+num(o.payout_amount)+'원</div>'
+        +'<div class="row"><input id="mk_reason_'+o.id+'" placeholder="불합격 사유" style="flex:1;min-width:160px">'
+        +'<button onclick="mkInspect('+o.id+',\'pass\')">합격</button>'
+        +'<button class="warn" onclick="mkInspect('+o.id+',\'fail\')">불합격</button></div></div>';
+    });
+    h+='</div>';
+
+    // --- 출고 대기 (합격) ---
+    var ship=orders.filter(function(o){return o.status==='passed';});
+    h+='<div class="card"><h3>출고 대기 <span class="pill '+(ship.length?'off':'on')+'">'+ship.length+'건</span></h3>';
+    if(!ship.length) h+='<p class="muted" style="margin-top:6px">출고 대기 건이 없습니다.</p>';
+    ship.forEach(function(o){
+      h+='<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
+        +'<div><b>'+esc(o.title)+'</b> <span class="muted">'+esc(o.order_uid)+'</span></div>'
+        +'<div class="muted">'+esc(o.buyer_nickname)+' · '+esc(o.buyer_address||'')+'</div>'
+        +'<div class="row"><input id="mk_trk_'+o.id+'" placeholder="출고 송장번호" style="flex:1;min-width:160px">'
+        +'<button onclick="mkShip('+o.id+')">발송 처리</button></div></div>';
+    });
+    h+='</div>';
+
+    // --- 환불 대기 (불합격) ---
+    var rf=orders.filter(function(o){return o.status==='failed';});
+    if(rf.length){
+      h+='<div class="card"><h3>환불 대기 <span class="pill off">'+rf.length+'건</span></h3>';
+      rf.forEach(function(o){
+        h+='<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
+          +'<div><b>'+esc(o.title)+'</b> <span class="muted">'+esc(o.order_uid)+'</span></div>'
+          +'<div class="muted">사유: '+esc(o.fail_reason||'')+' · 환불액 '+num(o.buyer_total)+'원</div>'
+          +'<div class="row"><button class="warn" onclick="mkRefund('+o.id+')">환불 확정</button></div></div>';
+      });
+      h+='</div>';
+    }
+
+    // --- 전체 주문 ---
+    h+='<div class="card"><h3>마켓 주문</h3><table><tr><th>#</th><th>상품</th><th>판매→구매</th>'
+      +'<th>거래가</th><th>접수번호</th><th>상태</th></tr>';
+    orders.forEach(function(o){
+      h+='<tr><td>'+o.id+'</td><td>'+esc(o.title)+'</td>'
+        +'<td class="muted">'+esc(o.seller_nickname)+' → '+esc(o.buyer_nickname)+'</td>'
+        +'<td>'+num(o.item_price)+'원</td><td class="muted">'+esc(o.inbound_code||'-')+'</td>'
+        +'<td>'+(MK_STATUS[o.status]||o.status)+'</td></tr>';
+    });
+    h+='</table></div>';
+    $('#view').innerHTML=h;
+  }).catch(function(e){ toast(e.message); });
+}
+
+function mkOrderOptions(){
+  var wait=MK_ORDERS.filter(function(o){
+    return o.status==='paid'||o.status==='awaiting_inbound'||o.status==='inbound';});
+  if(!wait.length) return '<option value="">입고 대기 주문 없음</option>';
+  return wait.map(function(o){
+    return '<option value="'+o.id+'">#'+o.id+' '+esc(o.title)+' · '+esc(o.seller_nickname)+'</option>';
+  }).join('');
+}
+
+function mkReceive(){
+  var code=document.getElementById('mk_code').value;
+  if(!clean(code)) return toast('박스에 적힌 값을 입력하세요');
+  api('/admin/market/inbound/receive',{code:code}).then(function(r){
+    toast('입고 처리됨: '+(r.order?r.order.title:''));
+    document.getElementById('mk_code').value='';
+    renderMarket();
+  }).catch(function(e){
+    // 후보가 여럿이거나 매칭 실패면 화면에 안내를 남긴다
+    document.getElementById('mk_scan_result').innerHTML=
+      '<p class="muted" style="margin-top:10px;color:#FF7A7A">'+esc(e.message)+'</p>';
+    toast(e.message);
+    renderMarket();
+  });
+}
+function mkMatch(inboundId){
+  var sel=document.getElementById('mk_match_'+inboundId);
+  if(!sel.value) return toast('매칭할 주문을 선택하세요');
+  api('/admin/market/inbound/'+inboundId+'/match',{order_id:+sel.value})
+    .then(function(){toast('매칭 완료 → 검수 대기로 이동');renderMarket();}).catch(function(e){toast(e.message);});
+}
+function mkInspect(id,result){
+  var reason=document.getElementById('mk_reason_'+id).value;
+  if(result==='fail'&&!clean(reason)) return toast('불합격 사유를 입력하세요');
+  if(result==='fail'&&!confirm('불합격 처리하면 구매자에게 전액 환불됩니다. 진행할까요?')) return;
+  api('/admin/market/orders/'+id+'/inspect',{result:result,reason:reason||null})
+    .then(function(r){toast(result==='pass'?'합격 · 정산 '+num(r.payout_amount)+'원 대기':'불합격 처리됨');renderMarket();})
+    .catch(function(e){toast(e.message);});
+}
+function mkShip(id){
+  var t=document.getElementById('mk_trk_'+id).value;
+  if(!clean(t)) return toast('송장번호를 입력하세요');
+  api('/admin/market/orders/'+id+'/ship',{tracking:t})
+    .then(function(){toast('발송 처리됨');renderMarket();}).catch(function(e){toast(e.message);});
+}
+function mkRefund(id){
+  if(!confirm('환불을 확정합니다. PG 취소는 별도로 진행해야 합니다.')) return;
+  api('/admin/market/orders/'+id+'/refund',{})
+    .then(function(r){toast('환불 확정 '+num(r.refund_amount)+'원');renderMarket();}).catch(function(e){toast(e.message);});
+}
+
+// ==================== 정산 · 정책 ====================
+function renderSettle(){
+  Promise.all([api('/admin/market/payouts'),api('/admin/market/overview')]).then(function(r){
+    var ps=r[0],ov=r[1],st=ov.settings;
+    var h='<div class="card"><h3>수수료 정책</h3>'
+      +'<p class="muted" style="margin-top:6px">변경해도 기존 주문의 수수료는 바뀌지 않습니다(주문 시점 값 고정).</p>'
+      +'<div class="row"><label class="muted">판매 수수료</label>'
+      +'<input class="sm" id="set_fee" type="number" step="0.01" value="'+st.fee_rate+'"> <span class="muted">(0.08 = 8%)</span></div>'
+      +'<div class="row"><label class="muted">검수비(판매자)</label>'
+      +'<input class="sm" id="set_insp" type="number" value="'+st.inspection_fee+'"> 원</div>'
+      +'<div class="row"><label class="muted">배송비(구매자)</label>'
+      +'<input class="sm" id="set_ship" type="number" value="'+st.shipping_fee+'"> 원</div>'
+      +'<div class="row"><button onclick="saveSettings()">정책 저장</button>'
+      +'<button class="ghost" onclick="toggleMarket('+(st.enabled?0:1)+')">'
+      +(st.enabled?'마켓 판매 중단':'마켓 판매 재개')+'</button>'
+      +'<span class="pill '+(st.enabled?'on':'off')+'">'+(st.enabled?'마켓 운영중':'마켓 중단')+'</span></div></div>';
+
+    var pend=ps.filter(function(p){return p.status==='pending'||p.status==='approved';});
+    h+='<div class="card"><h3>정산 대기 <span class="pill '+(pend.length?'off':'on')+'">'+pend.length+'건</span></h3>';
+    if(!pend.length) h+='<p class="muted" style="margin-top:6px">정산 대기 건이 없습니다.</p>';
+    pend.forEach(function(p){
+      h+='<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
+        +'<div><b>'+num(p.amount)+'원</b> · '+esc(p.seller_nickname)+' <span class="muted">'+esc(p.order_uid)+'</span></div>'
+        +'<div class="muted">'+esc(p.title)+'</div>'
+        +'<div class="muted">'+esc(p.bank||'계좌 미등록')+' '+esc(p.account||'')+' '+esc(p.holder||'')+'</div>'
+        +'<div class="row">'
+        +(p.status==='pending'?'<button onclick="payoutAct('+p.id+',\'approve\')">정산 승인</button>':'')
+        +'<button class="ghost" onclick="payoutAct('+p.id+',\'paid\')">이체 완료</button>'
+        +'<button class="warn" onclick="payoutAct('+p.id+',\'cancel\')">보류</button></div></div>';
+    });
+    h+='</div>';
+
+    h+='<div class="card"><h3>정산 내역</h3><table><tr><th>#</th><th>판매자</th><th>금액</th><th>상태</th><th>지급일</th></tr>';
+    ps.forEach(function(p){
+      h+='<tr><td>'+p.id+'</td><td>'+esc(p.seller_nickname)+'</td><td>'+num(p.amount)+'원</td>'
+        +'<td>'+({pending:'대기',approved:'승인',paid:'지급완료',cancelled:'보류'}[p.status]||p.status)+'</td>'
+        +'<td class="muted">'+esc(p.paid_at||'-')+'</td></tr>';
+    });
+    h+='</table></div>';
+    $('#view').innerHTML=h;
+  }).catch(function(e){ toast(e.message); });
+}
+function saveSettings(){
+  api('/admin/settings',{
+    market_fee_rate:document.getElementById('set_fee').value,
+    market_inspection_fee:document.getElementById('set_insp').value,
+    market_shipping_fee:document.getElementById('set_ship').value
+  }).then(function(){toast('정책 저장됨');renderSettle();}).catch(function(e){toast(e.message);});
+}
+function toggleMarket(on){
+  api('/admin/settings',{market_enabled:String(on)})
+    .then(function(){toast(on?'마켓 재개':'마켓 중단');renderSettle();}).catch(function(e){toast(e.message);});
 }
 
 if(TOKEN) boot();

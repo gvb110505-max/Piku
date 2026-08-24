@@ -161,10 +161,94 @@ CREATE TABLE IF NOT EXISTS shipments (
   fee INTEGER NOT NULL DEFAULT 3500, fee_paid INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'requested', tracking TEXT, created_at TEXT
 );
+
+-- ================= 마켓 (통신판매중개 / 중앙 검수) =================
+-- 운영 정책값. 관리자 페이지에서 수정 가능하며, 주문 생성 시점의 값을 주문 행에 박제한다.
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT
+);
+
+-- 판매자 정산 계좌 / 반송지. users를 건드리지 않기 위해 별도 테이블로 분리.
+CREATE TABLE IF NOT EXISTS seller_profiles (
+  user_id INTEGER PRIMARY KEY, bank TEXT, account TEXT, holder TEXT,
+  return_address TEXT, return_phone TEXT, created_at TEXT, updated_at TEXT
+);
+
+-- 판매 등록. product_key는 시세 집계 단위 (카드명|세트|등급 정규화).
+CREATE TABLE IF NOT EXISTS listings (
+  id ${ID}, seller_id INTEGER NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'single',      -- single | box
+  title TEXT NOT NULL, card_set TEXT, grade TEXT, condition TEXT,
+  product_key TEXT NOT NULL,
+  images TEXT NOT NULL DEFAULT '[]',
+  ask_price INTEGER NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'active',    -- active | reserved | sold | cancelled
+  created_at TEXT, updated_at TEXT
+);
+
+-- 에스크로 주문. 구매 대금은 Piku가 보관하고 검수 통과 후에만 판매자에게 정산한다.
+CREATE TABLE IF NOT EXISTS market_orders (
+  id ${ID}, order_uid TEXT UNIQUE NOT NULL,
+  listing_id INTEGER NOT NULL, buyer_id INTEGER NOT NULL, seller_id INTEGER NOT NULL,
+  product_key TEXT NOT NULL, title TEXT NOT NULL,
+  item_price INTEGER NOT NULL,
+  fee_rate REAL NOT NULL, fee_amount INTEGER NOT NULL,   -- 판매 수수료 (판매자 부담)
+  inspection_fee INTEGER NOT NULL DEFAULT 0,             -- 검수비 (판매자 부담)
+  shipping_fee INTEGER NOT NULL DEFAULT 0,               -- 구매자 부담 배송비
+  buyer_total INTEGER NOT NULL,                          -- 구매자 결제액 = item_price + shipping_fee
+  payout_amount INTEGER NOT NULL,                        -- 판매자 정산액 = item_price - fee - inspection_fee
+  status TEXT NOT NULL DEFAULT 'paid',
+  -- paid → awaiting_inbound → inbound → inspecting → passed → shipped → completed
+  --                                              └→ failed → refunded
+  --  전 단계 취소 시 → refunded
+  pg_key TEXT, buyer_address TEXT, out_tracking TEXT,
+  fail_reason TEXT,
+  created_at TEXT, updated_at TEXT
+);
+
+-- 판매자 → 검수센터 입고. 박스에 적는 식별자가 inbound_code.
+-- 코드 없는/판독 불가 박스는 order_id NULL + status='unmatched'로 등록해 나중에 수동 매칭한다.
+CREATE TABLE IF NOT EXISTS inbound_shipments (
+  id ${ID}, order_id INTEGER, seller_id INTEGER,
+  inbound_code TEXT, carrier TEXT NOT NULL DEFAULT 'hanjin',
+  pickup_address TEXT, pickup_phone TEXT, pickup_date TEXT,
+  tracking TEXT,
+  status TEXT NOT NULL DEFAULT 'requested', -- requested | picked_up | received | unmatched | discarded
+  note TEXT, photo TEXT,
+  received_at TEXT, created_at TEXT, updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS inspections (
+  id ${ID}, order_id INTEGER NOT NULL, inspector TEXT,
+  result TEXT NOT NULL,                     -- pass | fail
+  reason TEXT, photos TEXT NOT NULL DEFAULT '[]', created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS payouts (
+  id ${ID}, order_id INTEGER NOT NULL, seller_id INTEGER NOT NULL,
+  amount INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | paid | cancelled
+  bank TEXT, account TEXT, holder TEXT,
+  approved_at TEXT, paid_at TEXT, memo TEXT, created_at TEXT
+);
 `;
+
+// 마켓 기본 정책값 — 관리자 페이지에서 변경 가능. 주문 시점 값이 주문 행에 복사된다.
+const MARKET_DEFAULTS = {
+  market_fee_rate: "0.08",        // 판매 수수료 8% (판매자 부담)
+  market_inspection_fee: "0",     // 검수비 무료
+  market_shipping_fee: "3500",    // 검수센터 → 구매자 배송비 (구매자 부담)
+  market_enabled: "1",
+};
 
 async function seed() {
   const c = root;
+  // 마켓 정책값은 팩 시드 여부와 무관하게 항상 보정 (신규 키가 추가돼도 자동 반영)
+  for (const [k, v] of Object.entries(MARKET_DEFAULTS)) {
+    const row = await c.get("SELECT key FROM settings WHERE key=?", [k]);
+    if (!row) await c.run("INSERT INTO settings (key, value, updated_at) VALUES (?,?,?)", [k, v, NOW()]);
+  }
   const cnt = await c.get("SELECT COUNT(*) AS c FROM packs");
   if (Number(cnt.c) > 0) return;
 

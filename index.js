@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
-const BUILD = "2026-08-24.4"; // 관리자 페이지 캐시 확인용 빌드 스탬프
+const BUILD = "2026-08-24.6"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
@@ -64,11 +64,40 @@ function isMinor(birth) {
   if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age--;
   return age < 19; // 민법상 성년 = 만 19세
 }
+// 오늘 결제액 — 랜덤팩(orders)과 마켓 구매(market_orders)를 합산한다.
+// 합산하지 않으면 마켓이 미성년자 한도 우회 경로가 된다.
 async function todaySpent(userId) {
-  const r = await db.get(
-    "SELECT COALESCE(SUM(amount),0) AS s FROM orders WHERE user_id=? AND status='paid' AND substr(created_at,1,10)=?",
-    [userId, db.TODAY()]);
-  return Number(r.s);
+  const [pack, market] = await Promise.all([
+    db.get("SELECT COALESCE(SUM(amount),0) AS s FROM orders WHERE user_id=? AND status='paid' AND substr(created_at,1,10)=?",
+      [userId, db.TODAY()]),
+    db.get(`SELECT COALESCE(SUM(buyer_total),0) AS s FROM market_orders
+            WHERE buyer_id=? AND status NOT IN ('refunded') AND substr(created_at,1,10)=?`,
+      [userId, db.TODAY()]),
+  ]);
+  return Number(pack.s) + Number(market.s);
+}
+
+// 결제 전 한도 검사. 차단해야 하면 응답 바디를 돌려주고, 통과면 null.
+async function assertPaymentAllowed(userId, amount) {
+  const u = await db.get("SELECT birth FROM users WHERE id=?", [userId]);
+  if (!isMinor(u.birth)) return null;
+  const spent = await todaySpent(userId);
+  if (spent + amount <= MINOR_DAILY_LIMIT) return null;
+  return { error: "DAILY_LIMIT_MINOR", limit: MINOR_DAILY_LIMIT, spent,
+    remaining: Math.max(0, MINOR_DAILY_LIMIT - spent) };
+}
+
+// 토스 결제 승인. 시크릿 키가 없으면 개발 모드로 통과시킨다.
+async function confirmPayment({ paymentKey, orderId, amount }) {
+  if (!TOSS_SECRET_KEY) return { ok: true, key: paymentKey || "DEV" };
+  const r = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
+    method: "POST",
+    headers: { Authorization: "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64"),
+      "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentKey, orderId, amount }),
+  });
+  if (!r.ok) return { ok: false, detail: await r.text() };
+  return { ok: true, key: paymentKey };
 }
 
 app.get(["/", "/health"], (req, res) => {
@@ -143,24 +172,12 @@ app.post("/purchase", auth, h(async (req, res) => {
   if (!pack || pack.is_welcome) return res.status(400).json({ error: "BAD_PACK" });
   if (amount !== pack.price) return res.status(400).json({ error: "AMOUNT_MISMATCH" });
 
-  // 미성년자 일 결제 한도 — PG 승인 "전"에 차단
-  const buyer = await db.get("SELECT birth FROM users WHERE id=?", [req.userId]);
-  if (isMinor(buyer.birth)) {
-    const spent = await todaySpent(req.userId);
-    if (spent + amount > MINOR_DAILY_LIMIT)
-      return res.status(403).json({ error: "DAILY_LIMIT_MINOR",
-        limit: MINOR_DAILY_LIMIT, spent, remaining: Math.max(0, MINOR_DAILY_LIMIT - spent) });
-  }
+  // 미성년자 일 결제 한도 — PG 승인 "전"에 차단 (마켓 결제 합산)
+  const blocked = await assertPaymentAllowed(req.userId, amount);
+  if (blocked) return res.status(403).json(blocked);
 
-  if (TOSS_SECRET_KEY) {
-    const r = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
-      method: "POST",
-      headers: { Authorization: "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64"),
-        "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentKey, orderId, amount }),
-    });
-    if (!r.ok) return res.status(402).json({ error: "PAYMENT_FAILED", detail: await r.text() });
-  } // 키 미설정 = 개발 모드
+  const pay = await confirmPayment({ paymentKey, orderId, amount });
+  if (!pay.ok) return res.status(402).json({ error: "PAYMENT_FAILED", detail: pay.detail });
 
   try {
     const out = await db.tx(async (c) => {
@@ -248,6 +265,9 @@ app.get("/me", auth, h(async (req, res) => {
     cards, point_logs: logs, shipments, orders,
   });
 }));
+
+// ---------- 마켓 (통신판매중개) ----------
+require("./market").mount(app, { auth, admin, h, confirmPayment, assertPaymentAllowed });
 
 // ---------- 관리자 ----------
 let adminHtml = null;
