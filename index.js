@@ -9,6 +9,18 @@ const db = require("./db");
 const { getOdds, draw } = require("./gacha");
 
 const app = express();
+
+// CORS — Expo 웹/개발 서버는 다른 오리진에서 호출한다. 인증은 쿠키가 아니라
+// Authorization 헤더 토큰이라 credentials를 켜지 않으며, 따라서 CSRF 위험이 없다.
+app.use((req, res, next) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token");
+  res.set("Access-Control-Max-Age", "86400");
+  if (req.method === "OPTIONS") return res.sendStatus(204); // preflight
+  next();
+});
+
 // 예전 배포 구조(api/[...path].js)로 들어오던 /api 접두사를 흡수한다.
 // 이제 모든 요청이 이 파일 하나로 들어오므로 라우팅은 전부 Express가 담당한다.
 app.use((req, res, next) => {
@@ -31,7 +43,7 @@ app.use((req, res, next) => {
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
-const BUILD = "2026-08-24.8"; // 관리자 페이지 캐시 확인용 빌드 스탬프
+const BUILD = "2026-08-24.9"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
