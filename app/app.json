@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Piku",
+    "slug": "piku-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "piku",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0A0C",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.piku.app"
+    },
+    "android": {
+      "package": "com.piku.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0C",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-splash-screen", { "backgroundColor": "#0A0A0C", "image": "./assets/images/splash-icon.png", "imageWidth": 120 }]
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}
