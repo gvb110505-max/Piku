@@ -44,9 +44,9 @@ export default function Sell() {
       <Row style={{ marginTop: 4 }}>
         {(["single", "box"] as const).map((k) => (
           <Pressable key={k} onPress={() => setKind(k)}>
-            <View style={{ borderWidth: 1, borderColor: kind === k ? C.gold : C.line,
+            <View style={{ borderWidth: 1, borderColor: kind === k ? C.accent200 : C.line,
               borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}>
-              <Text style={{ color: kind === k ? C.gold : C.sub, fontWeight: "700", fontSize: 13 }}>
+              <Text style={{ color: kind === k ? C.accent200 : C.n500, fontWeight: "700", fontSize: 13 }}>
                 {k === "single" ? "싱글 카드" : "미개봉 박스"}
               </Text>
             </View>
@@ -64,31 +64,32 @@ export default function Sell() {
       </Card>
 
       {p > 0 ? (
-        <Card style={{ borderColor: C.goldDim }}>
-          <H2>예상 정산</H2>
+        <Card tone="panel">
+          <Sub>정산 예정액</Sub>
+          <Row style={{ justifyContent: "space-between", alignItems: "flex-end", marginTop: 6 }}>
+            <Text style={{ color: C.text, fontSize: 32, fontWeight: "500", letterSpacing: -0.6 }}>
+              {won(Math.max(0, payout))}
+            </Text>
+            {inspFee > 0 ? null : <Text style={{ color: C.accent300, fontSize: 12.5 }}>검수비 무료</Text>}
+          </Row>
+          <View style={{ height: 1, backgroundColor: "rgba(233,233,237,0.10)", marginVertical: 14 }} />
           <View style={{ marginTop: 10, gap: 6 }}>
             <Row style={{ justifyContent: "space-between" }}>
               <Sub>판매가</Sub><Text style={{ color: C.text }}>{won(p)}</Text>
             </Row>
             <Row style={{ justifyContent: "space-between" }}>
               <Sub>판매 수수료 ({(feeRate * 100).toFixed(0)}%)</Sub>
-              <Text style={{ color: C.red }}>-{won(fee)}</Text>
+              <Text style={{ color: C.danger }}>-{won(fee)}</Text>
             </Row>
             {inspFee > 0 ? (
               <Row style={{ justifyContent: "space-between" }}>
-                <Sub>검수비</Sub><Text style={{ color: C.red }}>-{won(inspFee)}</Text>
+                <Sub>검수비</Sub><Text style={{ color: C.danger }}>-{won(inspFee)}</Text>
               </Row>
             ) : (
               <Row style={{ justifyContent: "space-between" }}>
-                <Sub>검수비</Sub><Pill text="무료" tone="on" />
+                <Sub>검수비</Sub><Pill text="무료" tone="accent" />
               </Row>
             )}
-            <View style={{ borderTopWidth: 1, borderTopColor: C.line, paddingTop: 8, marginTop: 4 }}>
-              <Row style={{ justifyContent: "space-between" }}>
-                <Text style={{ color: C.text, fontWeight: "800" }}>정산 예정액</Text>
-                <Text style={{ color: C.gold, fontWeight: "900", fontSize: 17 }}>{won(Math.max(0, payout))}</Text>
-              </Row>
-            </View>
           </View>
         </Card>
       ) : null}
@@ -101,7 +102,7 @@ export default function Sell() {
       <Card>
         <H2>판매 방법</H2>
         <Sub style={{ marginTop: 8, lineHeight: 20 }}>
-          1. 상품이 팔리면 <Text style={{ color: C.gold }}>수거 신청</Text>을 눌러 접수번호를 받습니다{"\n"}
+          1. 상품이 팔리면 <Text style={{ color: C.accent200 }}>수거 신청</Text>을 눌러 접수번호를 받습니다{"\n"}
           2. 박스 윗면에 접수번호를 유성펜으로 크게 적습니다{"\n"}
           3. 집 앞에 두면 한진택배가 방문 수거합니다 (택배사 접수 불필요, 수거비 Piku 부담){"\n"}
           4. 검수 통과 후 등록하신 계좌로 정산됩니다

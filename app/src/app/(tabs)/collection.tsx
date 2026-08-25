@@ -56,7 +56,7 @@ export default function Collection() {
     <Screen onRefresh={refresh}>
       <Row style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <H1>컬렉션</H1>
-        <Text style={{ color: C.gold, fontWeight: "900" }}>{pt(me?.user.points ?? 0)}</Text>
+        <Text style={{ color: C.accent200, fontWeight: "900" }}>{pt(me?.user.points ?? 0)}</Text>
       </Row>
 
       {err ? <ErrorBox message={err} /> : null}
@@ -68,7 +68,7 @@ export default function Collection() {
           <Row style={{ justifyContent: "space-between", marginTop: 16 }}>
             <H2>보유 카드 {owned.length}장</H2>
             <Pressable onPress={() => { setShipMode((v) => !v); setSel([]); }}>
-              <Text style={{ color: C.gold, fontWeight: "800", fontSize: 13 }}>
+              <Text style={{ color: C.accent200, fontWeight: "800", fontSize: 13 }}>
                 {shipMode ? "취소" : "배송 신청"}
               </Text>
             </Pressable>
@@ -84,7 +84,7 @@ export default function Collection() {
                   </View>
                   {shipMode ? (
                     <View style={{ position: "absolute", top: 6, right: 6 }}>
-                      <Pill text={on ? "선택됨" : "선택"} tone={on ? "gold" : "neutral"} />
+                      <Pill text={on ? "선택됨" : "선택"} tone={on ? "accent" : "neutral"} />
                     </View>
                   ) : (
                     <Button title={`${pt(c.point_value)} 교환`} kind="ghost"
@@ -120,7 +120,7 @@ export default function Collection() {
           <View style={{ marginTop: 10, gap: 8 }}>
             {others.map((c) => (
               <Row key={c.id} style={{ justifyContent: "space-between" }}>
-                <Text style={{ color: C.sub, flex: 1 }} numberOfLines={1}>{c.name}</Text>
+                <Text style={{ color: C.n500, flex: 1 }} numberOfLines={1}>{c.name}</Text>
                 <Pill text={STATUS[c.status] || c.status} />
               </Row>
             ))}

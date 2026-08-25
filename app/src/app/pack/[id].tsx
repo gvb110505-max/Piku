@@ -61,7 +61,7 @@ export default function PackDetail() {
     <Screen onRefresh={load}>
       <Row style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <H1>{p.name}</H1>
-        {p.sold_out ? <Pill text="SOLD OUT" tone="off" /> : <Pill text={won(p.price)} tone="gold" />}
+        {p.sold_out ? <Pill text="SOLD OUT" tone="danger" /> : <Pill text={won(p.price)} tone="accent" />}
       </Row>
       {o.viewers ? <Sub style={{ marginTop: 6 }}>{o.viewers}명이 함께 보고 있어요</Sub> : null}
 
@@ -79,7 +79,7 @@ export default function PackDetail() {
             <View key={h.id}>
               <Row style={{ justifyContent: "space-between" }}>
                 <Text style={{ color: C.text, fontSize: 14, fontWeight: "700", flex: 1 }} numberOfLines={1}>{h.name}</Text>
-                <Text style={{ color: C.gold, fontWeight: "900" }}>{pct(h.probability)}</Text>
+                <Text style={{ color: C.accent200, fontWeight: "900" }}>{pct(h.probability)}</Text>
               </Row>
               <Row style={{ justifyContent: "space-between", marginTop: 2 }}>
                 <Sub>교환 {pt(h.point_value)}</Sub>
@@ -89,8 +89,8 @@ export default function PackDetail() {
           ))}
           <View style={{ borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 }}>
             <Row style={{ justifyContent: "space-between" }}>
-              <Text style={{ color: C.sub, fontSize: 14 }}>일반 카드</Text>
-              <Text style={{ color: C.sub, fontWeight: "800" }}>{pct(o.point_probability)}</Text>
+              <Text style={{ color: C.n500, fontSize: 14 }}>일반 카드</Text>
+              <Text style={{ color: C.n500, fontWeight: "800" }}>{pct(o.point_probability)}</Text>
             </Row>
           </View>
         </View>
@@ -104,11 +104,11 @@ export default function PackDetail() {
             {o.guaranteed.map((g) => (
               <Row key={g.id} style={{ justifyContent: "space-between" }}>
                 <Row style={{ flex: 1 }}>
-                  <Text style={{ color: g.awarded ? C.sub : C.gold, fontWeight: "900", width: 52 }}>#{g.slot_no}</Text>
-                  <Text style={{ color: g.awarded ? C.sub : C.text, flex: 1 }} numberOfLines={1}>{g.name}</Text>
+                  <Text style={{ color: g.awarded ? C.n500 : C.accent200, fontWeight: "900", width: 52 }}>#{g.slot_no}</Text>
+                  <Text style={{ color: g.awarded ? C.n500 : C.text, flex: 1 }} numberOfLines={1}>{g.name}</Text>
                 </Row>
                 {g.awarded ? <Pill text="지급 완료" />
-                  : g.next ? <Pill text="다음 차례" tone="gold" /> : null}
+                  : g.next ? <Pill text="다음 차례" tone="accent" /> : null}
               </Row>
             ))}
           </View>

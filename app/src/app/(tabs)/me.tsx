@@ -37,17 +37,20 @@ export default function Me() {
     <Screen onRefresh={() => { refresh(); loadIdent(); }}>
       <H1>마이</H1>
 
-      <Card>
+      <Card tone="panel">
         <Row style={{ justifyContent: "space-between" }}>
           <H2>{me?.user.nickname ?? "-"}</H2>
-          <Text style={{ color: C.gold, fontWeight: "900", fontSize: 18 }}>{pt(me?.user.points ?? 0)}</Text>
         </Row>
+        <Sub style={{ marginTop: 14 }}>보유 포인트</Sub>
+        <Text style={{ color: C.text, fontSize: 32, fontWeight: "500", letterSpacing: -0.6, marginTop: 6 }}>
+          {pt(me?.user.points ?? 0)}
+        </Text>
       </Card>
 
-      <Card>
+      <Card tone={ident?.verified ? "surface" : "accent"}>
         <Row style={{ justifyContent: "space-between" }}>
           <H2>본인확인</H2>
-          <Pill text={ident?.verified ? "완료" : "미완료"} tone={ident?.verified ? "on" : "off"} />
+          <Pill text={ident?.verified ? "완료" : "미완료"} tone={ident?.verified ? "accent" : "danger"} />
         </Row>
         {ident?.verified ? (
           <Sub style={{ marginTop: 6 }}>
@@ -96,7 +99,7 @@ export default function Me() {
                 <Row style={{ justifyContent: "space-between" }}>
                   <Text style={{ color: C.text, fontWeight: "700" }}>#{s.id}</Text>
                   <Pill text={{ requested: "접수", preparing: "준비 중", shipped: "발송 완료" }[s.status as string] || s.status}
-                    tone={s.status === "shipped" ? "on" : "neutral"} />
+                    tone={s.status === "shipped" ? "accent" : "neutral"} />
                 </Row>
                 <Sub style={{ marginTop: 2 }}>{s.address}</Sub>
                 {s.tracking ? <Sub>운송장 {s.tracking}</Sub> : null}
@@ -112,8 +115,8 @@ export default function Me() {
           <View style={{ marginTop: 10, gap: 8 }}>
             {me.point_logs.slice(0, 20).map((l: any) => (
               <Row key={l.id} style={{ justifyContent: "space-between" }}>
-                <Text style={{ color: C.sub, fontSize: 13, flex: 1 }} numberOfLines={1}>{l.reason}</Text>
-                <Text style={{ color: l.delta > 0 ? C.green : C.red, fontWeight: "800", fontSize: 13 }}>
+                <Text style={{ color: C.n500, fontSize: 13, flex: 1 }} numberOfLines={1}>{l.reason}</Text>
+                <Text style={{ color: l.delta > 0 ? C.up : C.danger, fontWeight: "800", fontSize: 13 }}>
                   {l.delta > 0 ? "+" : ""}{Number(l.delta).toLocaleString("ko-KR")}P
                 </Text>
               </Row>

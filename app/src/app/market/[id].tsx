@@ -87,7 +87,7 @@ export default function MarketItem() {
         {quote && quote.trade_count ? (
           <View style={{ marginTop: 10, gap: 6 }}>
             <Row style={{ justifyContent: "space-between" }}>
-              <Sub>최근 체결가</Sub><Text style={{ color: C.gold, fontWeight: "900" }}>{won(quote.last_price)}</Text>
+              <Sub>최근 체결가</Sub><Text style={{ color: C.accent200, fontWeight: "900" }}>{won(quote.last_price)}</Text>
             </Row>
             <Row style={{ justifyContent: "space-between" }}>
               <Sub>평균 체결가</Sub><Text style={{ color: C.text }}>{won(quote.avg_price)}</Text>
@@ -114,7 +114,7 @@ export default function MarketItem() {
           <View style={{ borderTopWidth: 1, borderTopColor: C.line, paddingTop: 8, marginTop: 4 }}>
             <Row style={{ justifyContent: "space-between" }}>
               <Text style={{ color: C.text, fontWeight: "800" }}>총 결제</Text>
-              <Text style={{ color: C.gold, fontWeight: "900", fontSize: 17 }}>{won(q.buyer_total)}</Text>
+              <Text style={{ color: C.accent200, fontWeight: "900", fontSize: 17 }}>{won(q.buyer_total)}</Text>
             </Row>
           </View>
         </View>

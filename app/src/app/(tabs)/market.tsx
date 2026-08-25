@@ -36,7 +36,7 @@ export default function Market() {
       <Row style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <H1>마켓</H1>
         <Pressable onPress={() => router.push("/market/sell")}>
-          <Text style={{ color: C.gold, fontWeight: "800", fontSize: 13 }}>판매하기</Text>
+          <Text style={{ color: C.accent200, fontWeight: "800", fontSize: 13 }}>판매하기</Text>
         </Pressable>
       </Row>
 
@@ -46,9 +46,9 @@ export default function Market() {
       <Row style={{ marginTop: 12, flexWrap: "wrap" }}>
         {[{ key: "", label: "전체" }, { key: "single", label: "싱글 카드" }, { key: "box", label: "미개봉 박스" }].map((k) => (
           <Pressable key={k.key} onPress={() => setKind(k.key)}>
-            <View style={{ borderWidth: 1, borderColor: kind === k.key ? C.gold : C.line,
+            <View style={{ borderWidth: 1, borderColor: kind === k.key ? C.accent200 : C.line,
               borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ color: kind === k.key ? C.gold : C.sub, fontSize: 12, fontWeight: "700" }}>{k.label}</Text>
+              <Text style={{ color: kind === k.key ? C.accent200 : C.n500, fontSize: 12, fontWeight: "700" }}>{k.label}</Text>
             </View>
           </Pressable>
         ))}
@@ -56,7 +56,7 @@ export default function Market() {
       <Row style={{ marginTop: 8, flexWrap: "wrap" }}>
         {SORTS.map((sOpt) => (
           <Pressable key={sOpt.key} onPress={() => setSort(sOpt.key)}>
-            <Text style={{ color: sort === sOpt.key ? C.gold : C.sub, fontSize: 12, fontWeight: "700", marginRight: 14 }}>
+            <Text style={{ color: sort === sOpt.key ? C.accent200 : C.n500, fontSize: 12, fontWeight: "700", marginRight: 14 }}>
               {sOpt.label}
             </Text>
           </Pressable>
@@ -80,7 +80,7 @@ export default function Market() {
               <Pill text={l.kind === "box" ? "박스" : "싱글"} />
             </Row>
             <Row style={{ justifyContent: "space-between", marginTop: 12 }}>
-              <Text style={{ color: C.gold, fontWeight: "900", fontSize: 17 }}>{won(l.ask_price)}</Text>
+              <Text style={{ color: C.accent200, fontWeight: "900", fontSize: 17 }}>{won(l.ask_price)}</Text>
               <Sub>{l.seller_nickname}</Sub>
             </Row>
           </Card>

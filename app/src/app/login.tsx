@@ -67,7 +67,7 @@ export default function Login() {
             <Field label="닉네임 (선택)" placeholder="트레이너" value={nickname} onChangeText={setNickname} />
             {devCode ? (
               <Row style={{ marginTop: 10 }}>
-                <Text style={{ color: C.gold, fontSize: 12, fontWeight: "800" }}>개발 모드 인증번호: {devCode}</Text>
+                <Text style={{ color: C.accent200, fontSize: 12, fontWeight: "800" }}>개발 모드 인증번호: {devCode}</Text>
               </Row>
             ) : null}
             <Button title="시작하기" onPress={verify} loading={busy}

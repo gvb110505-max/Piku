@@ -6,16 +6,16 @@ import { Screen, H2, Sub, Card, Button, Field, Pill, Loading, Empty, ErrorBox, R
 import { Api, ApiError, MarketOrder, Listing } from "@/lib/api";
 import { C, won } from "@/lib/theme";
 
-const STATUS: Record<string, { label: string; tone: "on" | "off" | "gold" | "neutral" }> = {
-  paid: { label: "결제 완료 · 보관 중", tone: "gold" },
-  awaiting_inbound: { label: "발송 대기", tone: "gold" },
+const STATUS: Record<string, { label: string; tone: "accent" | "danger" | "neutral" }> = {
+  paid: { label: "결제 완료 · 보관 중", tone: "accent" },
+  awaiting_inbound: { label: "발송 대기", tone: "accent" },
   inbound: { label: "입고됨", tone: "neutral" },
   inspecting: { label: "검수 중", tone: "neutral" },
-  passed: { label: "검수 합격", tone: "on" },
-  failed: { label: "검수 불합격", tone: "off" },
-  shipped: { label: "발송 완료", tone: "on" },
-  completed: { label: "거래 완료", tone: "on" },
-  refunded: { label: "환불 완료", tone: "off" },
+  passed: { label: "검수 합격", tone: "accent" },
+  failed: { label: "검수 불합격", tone: "danger" },
+  shipped: { label: "발송 완료", tone: "accent" },
+  completed: { label: "거래 완료", tone: "accent" },
+  refunded: { label: "환불 완료", tone: "danger" },
 };
 
 export default function MyTrades() {
@@ -51,9 +51,9 @@ export default function MyTrades() {
     return (
       <Screen>
         <H2 style={{ fontSize: 22 }}>수거 신청 완료</H2>
-        <Card style={{ borderColor: C.gold, alignItems: "center" }}>
+        <Card style={{ borderColor: C.accent200, alignItems: "center" }}>
           <Sub>박스에 적을 접수번호</Sub>
-          <Text style={{ color: C.gold, fontSize: 40, fontWeight: "900", letterSpacing: 4, marginTop: 8 }}>
+          <Text style={{ color: C.accent200, fontSize: 40, fontWeight: "900", letterSpacing: 4, marginTop: 8 }}>
             {guide.code}
           </Text>
         </Card>
@@ -63,7 +63,7 @@ export default function MyTrades() {
           ))}
         </Card>
         <Card style={{ borderColor: "#4A2A33" }}>
-          <Text style={{ color: C.red, fontSize: 12, lineHeight: 18 }}>{guide.warning}</Text>
+          <Text style={{ color: C.danger, fontSize: 12, lineHeight: 18 }}>{guide.warning}</Text>
         </Card>
         <Button title="확인" onPress={() => setGuide(null)} style={{ marginTop: 16 }} />
       </Screen>
@@ -75,7 +75,7 @@ export default function MyTrades() {
       <Row style={{ marginTop: 4 }}>
         {([["bought", "구매"], ["sold", "판매"], ["listings", "등록 상품"]] as const).map(([k, label]) => (
           <Pressable key={k} onPress={() => setTab(k)}>
-            <Text style={{ color: tab === k ? C.gold : C.sub, fontWeight: "800", fontSize: 14, marginRight: 18 }}>
+            <Text style={{ color: tab === k ? C.accent200 : C.n500, fontWeight: "800", fontSize: 14, marginRight: 18 }}>
               {label}
             </Text>
           </Pressable>
@@ -96,7 +96,7 @@ export default function MyTrades() {
             <Sub style={{ marginTop: 6 }}>{o.order_uid} · {won(o.buyer_total)}</Sub>
             {o.out_tracking ? <Sub style={{ marginTop: 4 }}>운송장 {o.out_tracking}</Sub> : null}
             {o.status === "failed" ? (
-              <Sub style={{ marginTop: 6, color: C.red }}>검수 불합격: {o.fail_reason} · 전액 환불 처리됩니다.</Sub>
+              <Sub style={{ marginTop: 6, color: C.danger }}>검수 불합격: {o.fail_reason} · 전액 환불 처리됩니다.</Sub>
             ) : null}
           </Card>
         ))
@@ -113,9 +113,9 @@ export default function MyTrades() {
             <Sub style={{ marginTop: 6 }}>정산 예정 {won(o.payout_amount)}</Sub>
 
             {o.inbound ? (
-              <View style={{ marginTop: 10, backgroundColor: C.cardHi, borderRadius: 10, padding: 12 }}>
+              <View style={{ marginTop: 10, backgroundColor: C.surface, borderRadius: 10, padding: 12 }}>
                 <Sub>접수번호</Sub>
-                <Text style={{ color: C.gold, fontSize: 22, fontWeight: "900", letterSpacing: 2, marginTop: 2 }}>
+                <Text style={{ color: C.accent200, fontSize: 22, fontWeight: "900", letterSpacing: 2, marginTop: 2 }}>
                   {o.inbound.inbound_code}
                 </Text>
                 <Sub style={{ marginTop: 6 }}>박스 윗면에 이 번호를 크게 적어주세요.</Sub>
@@ -145,9 +145,9 @@ export default function MyTrades() {
               <Row style={{ justifyContent: "space-between" }}>
                 <H2>{l.title}</H2>
                 <Pill text={{ active: "판매중", sold: "판매 완료", cancelled: "취소됨" }[l.status] ?? l.status}
-                  tone={l.status === "active" ? "on" : "neutral"} />
+                  tone={l.status === "active" ? "accent" : "neutral"} />
               </Row>
-              <Text style={{ color: C.gold, fontWeight: "900", marginTop: 8 }}>{won(l.ask_price)}</Text>
+              <Text style={{ color: C.accent200, fontWeight: "900", marginTop: 8 }}>{won(l.ask_price)}</Text>
             </Card>
           </Pressable>
         ))
