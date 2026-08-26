@@ -3,7 +3,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, Alert, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen, H1, H2, Sub, Card, Button, Field, Pill, Loading, ErrorBox, Row } from "@/components/ui";
-import { Api, ApiError, Listing, Quote } from "@/lib/api";
+import { CheckoutSheet } from "@/components/CheckoutSheet";
+import { Api, ApiError, Checkout, Listing, Quote } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { C, won } from "@/lib/theme";
 
@@ -22,6 +23,7 @@ export default function MarketItem() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const [checkout, setCheckout] = useState<Checkout | null>(null);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -34,14 +36,14 @@ export default function MarketItem() {
 
   useEffect(() => { load(); }, [load]);
 
+
+  // 링크 결제 — 여기서는 결제 링크만 받는다. 매물은 입금이 확인돼야 내 것이 된다.
   async function buy() {
     if (!data) return;
     setBusy(true); setErr(null);
     try {
-      const r = await Api.buy(data.listing.id, address.trim(), data.quote.buyer_total);
-      setDone(r.order_uid);
-      await refresh();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "결제에 실패했어요."); }
+      setCheckout(await Api.buy(data.listing.id, address.trim(), data.quote.buyer_total));
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "결제를 시작하지 못했어요."); }
     finally { setBusy(false); }
   }
 
@@ -128,11 +130,17 @@ export default function MarketItem() {
         <>
           <Field label="받는 주소" placeholder="도로명 주소, 상세주소" value={address} onChangeText={setAddress} multiline />
           {err ? <ErrorBox message={err} /> : null}
-          <Button title={`${won(q.buyer_total)} 결제`} loading={busy} disabled={!address.trim()}
-            onPress={() => ask("구매", `${won(q.buyer_total)}을 결제합니다.\n대금은 검수 통과 시까지 Piku가 보관합니다.`, buy)}
+          <Button title={`${won(q.buyer_total)} 결제하기`} loading={busy} disabled={!address.trim()}
+            onPress={() => ask("구매", `${won(q.buyer_total)} 결제 링크를 발급합니다.\n대금은 검수 통과 시까지 Piku가 보관합니다.`, buy)}
             style={{ marginTop: 16 }} />
         </>
       )}
+
+      {checkout ? (
+        <CheckoutSheet checkout={checkout}
+          onPaid={async (r) => { setCheckout(null); setDone(r.order_uid || checkout.uid); await refresh(); }}
+          onClose={() => { setCheckout(null); load(); }} />
+      ) : null}
 
       <Sub style={{ marginTop: 20 }}>
         Piku는 통신판매중개자로서 이 상품의 거래 당사자가 아니며, 상품·거래 정보 및 거래에 대한 책임은 판매 회원에게 있습니다.

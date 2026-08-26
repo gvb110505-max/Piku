@@ -1,9 +1,12 @@
-// 컬렉션 그리드의 카드 한 칸.
-// 같은 카드를 여러 장 가지고 있으면 한 칸으로 묶고 우상단에 수량 배지를 단다.
+// 컬렉션 한 칸. 같은 카드를 여러 장 가지고 있으면 한 칸으로 묶고 수량을 붙인다.
+//
+// 카드를 상품 진열처럼 꾸미지 않는다 — 여기 있는 건 내가 실제로 뽑은 기록이고,
+// 그 기록에서 중요한 건 이름과 교환 가치다. 그래서 아트는 조용한 프레임에 담고,
+// 이름·값은 아래에 표 형식으로 정렬한다. 금색은 HIT(=가치)에만 쓴다.
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { C, R, gradeLabel } from "@/lib/theme";
+import { C, R, NUM, gradeLabel } from "@/lib/theme";
 import { imageUrl } from "@/lib/api";
 
 export type CardGroup = {
@@ -17,43 +20,23 @@ export function CollectionCard({ group, selected, onPress }: {
   const hit = group.grade === "HIT";
   const src = imageUrl(group.image);
   const qty = group.ids.length;
-  // 등급 프레임 — HIT만 금색, 나머지는 무채색 헤어라인
-  const frame = hit ? C.gold : C.lineStrong;
 
   return (
-    <Pressable onPress={onPress} style={[st.tile, selected && st.tileOn]}>
-      <View style={[st.frame, { borderColor: frame }]}>
-        {/* 상단 흰 라벨 스트립 */}
-        <View style={st.label}>
-          <Text style={st.brand}>PIKU</Text>
-          <Text style={st.labelName} numberOfLines={1}>{group.name}</Text>
-        </View>
+    <Pressable onPress={onPress} style={({ pressed }) => [st.tile, pressed && { opacity: 0.75 }]}>
+      <View style={[st.frame, hit && st.frameHit, selected && st.frameOn]}>
+        {src ? (
+          <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={160} />
+        ) : selected ? null : (
+          <View style={st.blank}><Text style={st.blankText}>{gradeLabel(group.grade)}</Text></View>
+        )}
 
-        {/* 카드 아트 */}
-        <View style={st.art}>
-          {src ? (
-            <Image source={{ uri: src }} style={st.artFill} contentFit="cover" transition={160} />
-          ) : (
-            <View style={st.artPlaceholder}>
-              <View style={st.artInner}>
-                <Text style={st.artGrade}>{gradeLabel(group.grade)}</Text>
-              </View>
-              <Text style={st.artFoot}>POKEMON CARD</Text>
-            </View>
-          )}
-        </View>
-
-        {qty > 1 || selected ? (
-          <View style={[st.qty, selected && st.qtyOn]}>
-            <Text style={[st.qtyText, selected && st.qtyTextOn]}>
-              {selected ? "선택됨" : `x${qty}`}
-            </Text>
-          </View>
-        ) : null}
+        {hit ? <View style={st.hitTag}><Text style={st.hitTagText}>HIT</Text></View> : null}
+        {qty > 1 ? <Text style={st.qty}>×{qty}</Text> : null}
+        {selected ? <View style={st.check}><Text style={st.checkMark}>✓</Text></View> : null}
       </View>
 
-      <Text style={st.name} numberOfLines={2}>{group.name}</Text>
-      <Text style={[st.points, hit && { color: C.gold }]}>
+      <Text style={[st.name, selected && { color: C.text }]} numberOfLines={2}>{group.name}</Text>
+      <Text style={[st.value, hit && { color: C.gold }]}>
         {Number(group.point_value).toLocaleString("ko-KR")} P
       </Text>
     </Pressable>
@@ -61,25 +44,27 @@ export function CollectionCard({ group, selected, onPress }: {
 }
 
 const st = StyleSheet.create({
-  tile: { width: "48%", backgroundColor: C.surface, borderRadius: R.md, padding: 10,
-    borderWidth: 1, borderColor: "transparent" },
-  tileOn: { borderColor: C.accent, backgroundColor: C.accentFill },
-  frame: { borderRadius: R.sm + 2, borderWidth: 2, overflow: "hidden", backgroundColor: "#0E0E0E" },
-  label: { backgroundColor: "#F2F2F2", paddingVertical: 6, paddingHorizontal: 8, alignItems: "center", gap: 1 },
-  brand: { color: "#111", fontSize: 10, fontWeight: "700", fontStyle: "italic", letterSpacing: 0.4 },
-  labelName: { color: "#4A4A4A", fontSize: 8, fontWeight: "500" },
-  art: { aspectRatio: 3 / 4.1, backgroundColor: "#12141A" },
-  artFill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
-  artPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", padding: 10 },
-  artInner: { flex: 1, alignSelf: "stretch", margin: 6, borderRadius: 4, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center" },
-  artGrade: { color: C.n200, fontSize: 15, fontWeight: "600", letterSpacing: 1.5 },
-  artFoot: { color: "rgba(255,255,255,0.35)", fontSize: 6.5, fontWeight: "500", letterSpacing: 1.2, paddingBottom: 4 },
-  qty: { position: "absolute", top: 6, right: 6, minWidth: 26, paddingHorizontal: 7, paddingVertical: 3,
-    borderRadius: R.sm, backgroundColor: "rgba(10,10,10,0.86)", alignItems: "center" },
-  qtyOn: { backgroundColor: C.accent },
-  qtyText: { color: C.text, fontSize: 11, fontWeight: "600" },
-  qtyTextOn: { color: C.onAccent },
-  name: { color: C.text, fontSize: 12.5, fontWeight: "500", marginTop: 10, lineHeight: 17 },
-  points: { color: C.n300, fontSize: 13, fontWeight: "600", textAlign: "right", marginTop: 6 },
+  tile: { width: "48%" },
+  frame: { aspectRatio: 3 / 4.1, borderRadius: R.sm, overflow: "hidden",
+    backgroundColor: C.panel, borderWidth: 1, borderColor: C.line },
+  frameHit: { borderColor: C.goldDim },
+  frameOn: { borderColor: C.accent, borderWidth: 2 },
+  fill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+
+  blank: { flex: 1, alignItems: "center", justifyContent: "center" },
+  blankText: { color: C.artLabel, fontSize: 11 },
+
+  hitTag: { position: "absolute", top: 0, left: 0, paddingHorizontal: 6, paddingVertical: 3,
+    backgroundColor: "rgba(10,10,10,0.82)" },
+  hitTagText: { color: C.gold, fontSize: 9, fontWeight: "600", letterSpacing: 1 },
+
+  qty: { ...NUM, position: "absolute", bottom: 6, right: 7, color: C.text, fontSize: 12, fontWeight: "600",
+    textShadowColor: "rgba(0,0,0,0.9)", textShadowRadius: 4 },
+
+  check: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
+    backgroundColor: "rgba(10,10,10,0.72)", alignItems: "center", justifyContent: "center" },
+  checkMark: { color: C.text, fontSize: 26, fontWeight: "600" },
+
+  name: { color: C.n300, fontSize: 12.5, lineHeight: 17, marginTop: 9 },
+  value: { ...NUM, color: C.n500, fontSize: 12, fontWeight: "600", marginTop: 4 },
 });

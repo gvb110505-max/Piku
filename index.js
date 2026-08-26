@@ -309,7 +309,7 @@ app.post("/checkout", auth, h(async (req, res) => {
     const out = await pay.createCheckout({
       kind: "pack", userId: req.userId, refId: pack.id, amount: pack.price,
       title: pack.name, payUrlOverride: pack.pay_url || null });
-    res.json(out);
+    res.json({ ...out, dev_mode: PAY_DEV_MODE });
   } catch (e) {
     res.status(e.status || 400).json({ error: e.message, message: e.message_ko });
   }
@@ -350,7 +350,8 @@ async function settleAndRespond(uid, opts, res, ownerId) {
     refund_requested: out.refund_requested,
     message: out.refund_requested ? "결제는 확인됐지만 상품 확정에 실패했어요. 환불 요청을 접수했습니다." : undefined });
   const after = await pay.find(uid);
-  res.json({ ok: true, already: !!out.already, ...pay.publicView(after, await pay.getPaySettings()) });
+  res.json({ ok: true, already: !!out.already,
+    ...pay.publicView(after, await pay.getPaySettings()), dev_mode: PAY_DEV_MODE });
 }
 
 // 결제 제공자 웹훅. 공유 비밀이 설정돼 있을 때만 열린다 — 아무나 주문을 확정시키면 안 된다.

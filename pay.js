@@ -90,7 +90,7 @@ async function createCheckout({ kind, userId, refId, amount, title, payUrlOverri
     [uid, kind, userId, refId ?? null, title || null, amount, st.provider, payUrl,
      payload ? JSON.stringify(payload) : null, expires, db.NOW()]);
 
-  return { id, uid, kind, amount, provider: st.provider, pay_url: payUrl,
+  return { id, uid, kind, title: title || null, amount, provider: st.provider, pay_url: payUrl,
     bank: st.provider === "manual" ? st.bank : "", expires_at: expires, status: "pending" };
 }
 

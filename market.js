@@ -193,7 +193,7 @@ function mount(app, deps) {
         kind: "market", userId: req.userId, refId: listing.id, amount: q.buyer_total,
         title: listing.title, payload: { address, quote: q } });
       res.json({ ...out, ...q,
-        notice: "결제 대금은 검수 통과 시까지 Piku가 보관합니다." });
+        notice: "결제 대금은 검수 통과 시까지 Piku가 보관합니다." });   // out.uid = 주문번호
     } catch (e) {
       res.status(e.status || 400).json({ error: e.message, message: e.message_ko });
     }

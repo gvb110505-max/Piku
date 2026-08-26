@@ -1,5 +1,10 @@
-// 흑백 팔레트. 색은 전부 여기서만 정의한다 — 화면/컴포넌트에 하드코딩 금지.
-// 강조는 색상 대신 명도와 흰색 채움으로 준다.
+// Piku 흑백 팔레트. 색은 전부 여기서만 정의한다 — 화면/컴포넌트에 하드코딩 금지.
+//
+// 이 앱의 성격: 확률을 숨기지 않는 서비스다. 표시 확률 = 실제 추첨 확률이고,
+// 그 숫자는 재고를 따라 살아 움직인다. 그래서 화면의 주인공은 사진이나 배너가 아니라
+// "숫자"다 — 등폭 숫자(tabular-nums)로 오른쪽에 정렬하고, 헤어라인으로 행을 나눈다.
+// 장식(가짜 할인, 이벤트 라벨, 흐르는 티커)은 쓰지 않는다. 숫자를 가리기 때문이다.
+import { Platform, TextStyle } from "react-native";
 export const C = {
   bg: "#0A0A0A",          // 화면 바탕
   surface: "#151515",     // 카드·필드
@@ -50,6 +55,13 @@ export const ART = {
 };
 
 export const R = { sm: 6, md: 12, lg: 18, pill: 9999 } as const;
+
+// 숫자는 항상 등폭으로. 값이 바뀔 때 자릿수가 흔들리면 "살아 있는 수치"로 읽히지 않는다.
+export const NUM: TextStyle = { fontVariant: ["tabular-nums"] };
+// 주문번호·코드처럼 사람이 그대로 옮겨 적는 문자열
+export const MONO: TextStyle = {
+  fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "ui-monospace, Menlo, monospace" }),
+};
 
 export const won = (n: number | string) => Number(n || 0).toLocaleString("ko-KR") + "원";
 export const pt = (n: number | string) => Number(n || 0).toLocaleString("ko-KR") + "P";

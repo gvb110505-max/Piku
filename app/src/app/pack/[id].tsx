@@ -1,17 +1,16 @@
-// 팩 상세 — 확률표, 개봉 현황, GUARANTEED 마일스톤, 구매·개봉
+// 팩 상세 — 확률표, 개봉 현황, GUARANTEED 마일스톤, 결제·개봉
+//
+// 결제는 링크 결제라 "결제 → 즉시 개봉"이 아니다.
+// 결제 링크를 발급받아 시트를 띄우고, 입금이 확인된 뒤에야 개봉 결과가 온다.
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, Alert, Platform } from "react-native";
+import { View, Text } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Screen, H1, H2, Sub, Card, Pill, Bar, Button, Loading, ErrorBox, Row } from "@/components/ui";
 import { Reveal } from "@/components/Reveal";
-import { Api, Odds, DrawResult, ApiError } from "@/lib/api";
+import { CheckoutSheet } from "@/components/CheckoutSheet";
+import { Api, Odds, DrawResult, Checkout, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { C, won, pt, pct } from "@/lib/theme";
-
-function confirmBuy(title: string, msg: string, onOk: () => void) {
-  if (Platform.OS === "web") { if (confirm(`${title}\n\n${msg}`)) onOk(); return; }
-  Alert.alert(title, msg, [{ text: "취소", style: "cancel" }, { text: "결제", onPress: onOk }]);
-}
+import { C, NUM, won, pt, pct } from "@/lib/theme";
 
 export default function PackDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,6 +20,7 @@ export default function PackDetail() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<DrawResult | null>(null);
+  const [checkout, setCheckout] = useState<Checkout | null>(null);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -30,17 +30,21 @@ export default function PackDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function buy() {
+  // 1단계 — 결제 링크만 받아온다. 이 시점에는 아무것도 뽑히지 않는다.
+  async function startCheckout() {
     if (!o) return;
     setBusy(true); setErr(null);
-    try {
-      const r = await Api.purchase(o.pack.id, o.pack.price);
-      setResult(r.result);
-      await refresh();
-      await load();
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "결제에 실패했어요.");
-    } finally { setBusy(false); }
+    try { setCheckout(await Api.checkout(o.pack.id, o.pack.price)); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "결제를 시작하지 못했어요."); }
+    finally { setBusy(false); }
+  }
+
+  // 2단계 — 입금이 확인되면 그때 개봉 결과가 도착한다.
+  async function onPaid(r: NonNullable<Checkout["result"]>) {
+    setCheckout(null);
+    if (r.result) setResult(r.result);
+    await refresh();
+    await load();
   }
 
   if (result) {
@@ -78,8 +82,8 @@ export default function PackDetail() {
           {o.hits.map((h) => (
             <View key={h.id}>
               <Row style={{ justifyContent: "space-between" }}>
-                <Text style={{ color: C.text, fontSize: 14, fontWeight: "700", flex: 1 }} numberOfLines={1}>{h.name}</Text>
-                <Text style={{ color: C.accent200, fontWeight: "900" }}>{pct(h.probability)}</Text>
+                <Text style={{ color: C.text, fontSize: 14, fontWeight: "500", flex: 1 }} numberOfLines={1}>{h.name}</Text>
+                <Text style={{ ...NUM, color: C.text, fontSize: 15, fontWeight: "600" }}>{pct(h.probability)}</Text>
               </Row>
               <Row style={{ justifyContent: "space-between", marginTop: 2 }}>
                 <Sub>교환 {pt(h.point_value)}</Sub>
@@ -90,7 +94,7 @@ export default function PackDetail() {
           <View style={{ borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 }}>
             <Row style={{ justifyContent: "space-between" }}>
               <Text style={{ color: C.n500, fontSize: 14 }}>일반 카드</Text>
-              <Text style={{ color: C.n500, fontWeight: "800" }}>{pct(o.point_probability)}</Text>
+              <Text style={{ ...NUM, color: C.n500, fontSize: 14, fontWeight: "600" }}>{pct(o.point_probability)}</Text>
             </Row>
           </View>
         </View>
@@ -123,15 +127,21 @@ export default function PackDetail() {
       {err ? <ErrorBox message={err} /> : null}
 
       <Button
-        title={p.sold_out ? "품절" : `${won(p.price)} 결제하고 개봉`}
-        onPress={() => confirmBuy(p.name, `${won(p.price)}을 결제합니다.`, buy)}
+        title={p.sold_out ? "품절" : `${won(p.price)} 결제하기`}
+        onPress={startCheckout}
         loading={busy}
         disabled={p.sold_out || !p.active}
         style={{ marginTop: 20 }}
       />
-      <Sub style={{ marginTop: 12 }}>
-        랜덤팩은 Piku가 직접 판매하는 상품입니다. 개봉 결과는 포인트로 교환하거나 실물 배송을 신청할 수 있어요.
+      <Sub style={{ marginTop: 12, lineHeight: 19 }}>
+        결제 링크로 결제하면 입금 확인 뒤 바로 개봉됩니다. 랜덤팩은 Piku가 직접 판매하며,
+        개봉 결과는 포인트로 교환하거나 실물 배송을 신청할 수 있어요.
       </Sub>
+
+      {checkout ? (
+        <CheckoutSheet checkout={checkout} onPaid={onPaid}
+          onClose={() => { setCheckout(null); load(); }} />
+      ) : null}
     </Screen>
   );
 }

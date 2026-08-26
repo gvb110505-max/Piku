@@ -57,6 +57,11 @@ const MESSAGES: Record<string, string> = {
   WELCOME_ALREADY_USED: "웰컴팩은 계정당 한 번만 열 수 있어요.",
   NOT_ENOUGH_POINTS: "포인트가 부족해요.",
   SOLD_OUT: "방금 매진됐어요.",
+  TOO_MANY_PENDING_PAYMENTS: "결제 대기 중인 주문이 있어요. 먼저 결제하거나 취소해 주세요.",
+  LISTING_HELD: "다른 분이 결제 중이에요. 잠시 후 다시 시도해 주세요.",
+  PAYMENT_NOT_FOUND: "결제 정보를 찾지 못했어요.",
+  PAYMENT_NOT_PENDING: "이미 처리된 결제예요.",
+  DEV_CONFIRM_DISABLED: "테스트 결제는 사용할 수 없어요.",
   PACK_INACTIVE: "지금은 판매하지 않는 팩이에요.",
   AMOUNT_MISMATCH: "가격 정보가 바뀌었어요. 새로고침해주세요.",
   LISTING_UNAVAILABLE: "다른 분이 먼저 구매했어요.",
@@ -85,6 +90,17 @@ export type Pack = {
 export type Hit = { id: number; name: string; image: string; total_qty: number; remaining: number; point_value: number; probability: number };
 export type Guaranteed = { id: number; slot_no: number; name: string; image: string; awarded: boolean; next: boolean };
 export type Odds = { pack: Pack; hits: Hit[]; point_probability: number; point_remaining: number; guaranteed: Guaranteed[]; viewers?: number };
+// ---------- 링크 결제 ----------
+// 앱은 결제를 직접 처리하지 않는다. 서버가 발급한 주문번호(uid)와 결제 링크를 받아
+// 링크를 열어주고, 입금이 확인될 때까지 상태만 지켜본다.
+export type PayStatus = "pending" | "paid" | "expired" | "cancelled" | "failed";
+export type Checkout = {
+  uid: string; kind: "pack" | "market"; title?: string | null; amount: number;
+  provider: "manual" | "link" | "dev"; pay_url: string | null; bank: string;
+  status: PayStatus; expires_at: string | null; paid_at?: string | null;
+  fail_reason?: string | null; dev_mode?: boolean;
+  result?: { order_id: number; result?: DrawResult; order_uid?: string; status?: string } | null;
+};
 export type DrawResult = { grade: string; name: string; image: string; point_value: number; card_id: number; draw_no: number;
   bonus: { name: string; slot_no: number; point_value: number } | null };
 export type OwnedCard = { id: number; name: string; grade: string; image: string; point_value: number; status: string; pack_name: string; created_at: string };
@@ -122,8 +138,11 @@ export const Api = {
   pack: (id: number) => api<Odds>(`/packs/${id}`, { auth: false }),
   recentHits: (limit = 20) => api<RecentHit[]>(`/packs/recent-hits?limit=${limit}`, { auth: false }),
 
-  purchase: (pack_id: number, amount: number) =>
-    api<{ order_id: number; result: DrawResult }>("/purchase", { body: { pack_id, amount, method: "toss" } }),
+  // 결제 링크 발급 — 이 시점에는 아무것도 뽑히지 않는다. 슬롯만 잠시 잡아둔다.
+  checkout: (pack_id: number, amount: number) => api<Checkout>("/checkout", { body: { pack_id, amount } }),
+  checkoutStatus: (uid: string) => api<Checkout>(`/checkout/${uid}`),
+  cancelCheckout: (uid: string) => api(`/checkout/${uid}/cancel`, { body: {} }),
+  confirmDev: (uid: string) => api<Checkout>(`/checkout/${uid}/confirm-dev`, { body: {} }),
   welcome: () => api<{ result: DrawResult }>("/purchase/welcome", { body: {} }),
 
   me: () => api<any>("/me"),
@@ -147,7 +166,7 @@ export const Api = {
   cancelListing: (id: number) => api(`/market/listings/${id}/cancel`, { body: {} }),
   quotes: (productKey: string) => api<any>(`/market/quotes?product_key=${encodeURIComponent(productKey)}`, { auth: false }),
   buy: (listing_id: number, address: string, amount: number) =>
-    api<{ order_id: number; order_uid: string; notice: string }>("/market/orders", { body: { listing_id, address, amount } }),
+    api<Checkout & Quote & { notice: string }>("/market/orders", { body: { listing_id, address, amount } }),
   myTrades: () => api<{ bought: MarketOrder[]; sold: MarketOrder[]; listings: Listing[] }>("/market/orders/mine"),
   pickup: (orderId: number, b: { pickup_address: string; pickup_phone: string; pickup_date?: string }) =>
     api<{ inbound_code: string; steps: string[]; warning: string; carrier: string }>(`/market/orders/${orderId}/pickup`, { body: b }),

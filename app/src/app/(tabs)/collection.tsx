@@ -9,7 +9,7 @@ import { CollectionCard, CardGroup } from "@/components/CollectionCard";
 import { IconTruck } from "@/components/icons";
 import { Api, ApiError, OwnedCard } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { C, R, won, pt } from "@/lib/theme";
+import { C, R, NUM, won, pt } from "@/lib/theme";
 
 const SHIP_FEE = 3500;
 const STATUS: Record<string, string> = {
@@ -87,19 +87,17 @@ export default function Collection() {
 
   return (
     <SafeAreaView style={st.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 150 }}>
-        <Row style={{ justifyContent: "space-between" }}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: hasSel ? 100 : 32 }}>
+        {/* 홈과 같은 머리 구조 — 왼쪽 제목, 오른쪽 수치 */}
+        <Row style={{ justifyContent: "space-between", alignItems: "baseline" }}>
           <H1>컬렉션</H1>
-          <View style={st.balance}>
-            <View style={st.dot} />
-            <Text style={st.balanceText}>{pt(me?.user.points ?? 0)}</Text>
-          </View>
+          <Text style={st.balanceText}>{pt(me?.user.points ?? 0)}</Text>
         </Row>
 
-        <Text style={st.count}>
-          {owned.length}장 · {groups.length}종
-          {hasSel ? <Text style={{ color: C.accent200 }}>{`   선택 ${selectedIds.length}장 · ${pt(selectedValue)}`}</Text> : null}
-        </Text>
+        <View style={st.countRow}>
+          <Text style={st.count}>{owned.length}장 · {groups.length}종</Text>
+          {hasSel ? <Text style={st.selCount}>선택 {selectedIds.length}장 · {pt(selectedValue)}</Text> : null}
+        </View>
 
         {err ? <ErrorBox message={err} /> : null}
 
@@ -128,21 +126,20 @@ export default function Collection() {
         ) : null}
       </ScrollView>
 
-      {/* 플로팅 액션 — 선택이 있어야 눌린다 */}
-      <View style={st.fab} pointerEvents="box-none">
-        <Pressable onPress={hasSel ? exchange : undefined}
-          style={[st.fabBtn, !hasSel && st.fabOff]}>
-          <View style={st.coin} />
-          <Text style={[st.fabText, !hasSel && st.fabTextOff]}>
-            {hasSel ? `${pt(selectedValue)} 변환` : "포인트 변환"}
-          </Text>
-        </Pressable>
-        <Pressable onPress={hasSel ? () => setShipOpen(true) : undefined}
-          style={[st.fabBtn, !hasSel && st.fabOff]}>
-          <IconTruck size={17} color={hasSel ? C.onAccent : C.n500} />
-          <Text style={[st.fabText, !hasSel && st.fabTextOff]}>배송 신청</Text>
-        </Pressable>
-      </View>
+      {/* 액션 바 — 선택했을 때만 올라온다.
+          누를 수도 없는 버튼을 늘 띄워두면 카드만 가린다. */}
+      {hasSel ? (
+        <View style={st.actions}>
+          <Pressable onPress={exchange} style={st.actionBtn}>
+            <View style={st.coin} />
+            <Text style={st.actionText}>{pt(selectedValue)} 변환</Text>
+          </Pressable>
+          <Pressable onPress={() => setShipOpen(true)} style={[st.actionBtn, st.actionAlt]}>
+            <IconTruck size={16} color={C.text} />
+            <Text style={[st.actionText, { color: C.text }]}>배송 신청</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <Modal visible={shipOpen} transparent animationType="slide" onRequestClose={() => setShipOpen(false)}>
         <Pressable style={st.backdrop} onPress={() => setShipOpen(false)} />
@@ -165,21 +162,20 @@ export default function Collection() {
 
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  balance: { flexDirection: "row", alignItems: "center", gap: 7, height: 40, paddingHorizontal: 15,
-    borderRadius: R.pill, backgroundColor: C.surface },
-  dot: { width: 5, height: 5, borderRadius: 5, backgroundColor: C.gold },
-  balanceText: { color: C.text, fontSize: 13, fontWeight: "500" },
-  count: { color: C.n500, fontSize: 12.5, marginTop: 12, marginBottom: 4 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 10 },
+  balanceText: { ...NUM, color: C.n300, fontSize: 13, fontWeight: "500" },
+  countRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline",
+    marginTop: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.lineSoft },
+  count: { ...NUM, color: C.n500, fontSize: 12.5 },
+  selCount: { ...NUM, color: C.text, fontSize: 12.5, fontWeight: "600" },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 18 },
   pastName: { color: C.n400, fontSize: 13, flex: 1 },
 
-  fab: { position: "absolute", right: 20, bottom: 24, gap: 10, alignItems: "flex-end" },
-  fabBtn: { flexDirection: "row", alignItems: "center", gap: 9, height: 48, paddingHorizontal: 20,
-    borderRadius: R.pill, backgroundColor: C.accent },
-  fabOff: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
-  fabText: { color: C.onAccent, fontSize: 14.5, fontWeight: "600" },
-  fabTextOff: { color: C.n500 },
-  coin: { width: 15, height: 15, borderRadius: 8, borderWidth: 2, borderColor: C.onAccent },
+  actions: { position: "absolute", left: 20, right: 20, bottom: 20, flexDirection: "row", gap: 10 },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    height: 50, borderRadius: R.pill, backgroundColor: C.accent },
+  actionAlt: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.lineStrong },
+  actionText: { color: C.onAccent, fontSize: 14, fontWeight: "600" },
+  coin: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: C.onAccent },
 
   backdrop: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.66)" },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: C.surface,
