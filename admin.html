@@ -171,10 +171,22 @@ function boot(){
       +'\n\n원인이 명확하지 않으면 아래 "서버 진단"을 눌러 결과를 보내주세요.'; }
   });
 }
+// 탭 전환. 렌더러가 없거나 그리다 터지면 화면을 비워두지 말고 이유를 띄운다 —
+// 빈 화면은 "서버가 죽었나" 하고 엉뚱한 데를 보게 만든다.
+var VIEWS={dash:renderDash,packs:renderPacks,ship:renderShip,orders:renderOrders,
+  pay:renderPay,market:renderMarket,settle:renderSettle};
 function go(t){
   var tabs=document.querySelectorAll('.tab');
   for(var i=0;i<tabs.length;i++) tabs[i].classList.toggle('on',tabs[i].dataset.t===t);
-  ({dash:renderDash,packs:renderPacks,ship:renderShip,orders:renderOrders,pay:renderPay,market:renderMarket,settle:renderSettle})[t]();
+  try{
+    var fn=VIEWS[t];
+    if(typeof fn!=='function') throw new Error('화면을 찾지 못했습니다: '+t);
+    fn();
+  }catch(e){
+    $('#view').innerHTML='<div class="card"><h3>화면을 그리지 못했습니다</h3>'
+      +'<p class="muted" style="margin-top:8px">'+esc(e && e.message || e)+'</p></div>';
+    toast(e && e.message || '오류');
+  }
 }
 
 function renderDash(){
@@ -253,11 +265,16 @@ var IMG_MAX = 900;      // 긴 변 최대 픽셀
 var IMG_QUALITY = 0.86;
 
 // 슬롯 한 칸: 현재 이미지 미리보기 + 파일 선택 + 비우기
+// 시드 데이터에는 "pack_5000" 같은 옛 키가 남아 있다 — 그건 URL이 아니라서
+// <img src>로 걸면 404만 난다. 실제 주소일 때만 미리보기를 띄운다.
+function isImgUrl(v){ var s=String(v||'').trim(); return /^https?:\/\//i.test(s) || s.charAt(0)==='/'; }
 function imgCell(kind, id, url){
   var key = kind+'_'+id;
-  var box = url
+  var real = isImgUrl(url);
+  var box = real
     ? '<img class="thumb" id="th_'+key+'" src="'+esc(url)+'" alt="">'
     : '<div class="thumb empty" id="th_'+key+'">없음</div>';
+  url = real ? url : '';
   return '<div class="imgcell">'+box
     + '<input type="file" accept="image/*" id="fi_'+key+'" style="display:none" '
     + 'onchange="pickImage(\''+kind+'\','+id+',this)">'
@@ -397,6 +414,94 @@ function renderOrders(){
     h+='</table></div>';
     $('#view').innerHTML=h;
   }).catch(function(e){ toast(e.message); });
+}
+
+// ==================== 결제 대사 ====================
+// 링크 결제라 입금 확인은 사람이 한다. 주문번호와 입금자명을 맞춰보고 승인하면
+// 그 시점에 개봉/주문이 확정된다. 승인 전에는 아무것도 뽑히지 않는다.
+var PAY_LABEL={pending:'입금 대기',paid:'확정됨',expired:'시간 만료',cancelled:'취소',failed:'확정 실패'};
+function payOpt(v,label,cur){ return '<option value="'+v+'"'+(cur===v?' selected':'')+'>'+label+'</option>'; }
+
+function payTable(rows,act){
+  var h='<table><tr><th>주문번호</th><th>구분</th><th>유저</th><th>금액</th><th>상태</th><th>입금자</th><th></th></tr>';
+  rows.forEach(function(p){
+    h+='<tr><td><b>'+esc(p.uid)+'</b></td>'
+      +'<td>'+(p.kind==='pack'?'랜덤팩':'마켓')+'</td>'
+      +'<td class="muted">'+esc(p.nickname||'-')+' '+esc(p.phone||'')+'</td>'
+      +'<td>'+num(p.amount)+'원</td>'
+      +'<td>'+(PAY_LABEL[p.status]||p.status)+'</td>'
+      +'<td class="muted">'+esc(p.payer_name||'')+'</td><td>';
+    if(act) h+='<input class="sm" id="pn_'+esc(p.uid)+'" placeholder="입금자명" style="width:88px"> '
+      +'<button onclick="payConfirm(\''+esc(p.uid)+'\')">입금 확인</button> '
+      +'<button class="warn" onclick="payReject(\''+esc(p.uid)+'\')">반려</button>';
+    h+='</td></tr>';
+  });
+  return h+'</table>';
+}
+
+function renderPay(){
+  api('/admin/payments?status=all').then(function(r){
+    var st=r.settings, ps=r.payments;
+    var pend=ps.filter(function(p){return p.status==='pending';});
+    var bad=ps.filter(function(p){return p.status==='failed';});
+
+    var h='<div class="card"><h3>결제 방식</h3>'
+      +'<p class="muted" style="margin-top:6px">앱에는 결제 SDK가 없습니다. 서버가 주문번호와 결제 링크를 내려주고, '
+      +'입금이 확인된 시점에 상품이 확정됩니다.</p>'
+      +'<div class="row"><label class="muted">방식</label>'
+      +'<select id="pay_provider">'
+      +payOpt('manual','무통장 입금(계좌 안내)',st.provider)
+      +payOpt('link','주문서 링크(블로그페이 등)',st.provider)
+      +'</select></div>'
+      +'<div class="row"><label class="muted">주문서 링크</label>'
+      +'<input id="pay_tpl" style="min-width:300px" placeholder="https://... ?amount={amount}&memo={uid}" value="'+esc(st.template)+'"></div>'
+      +'<p class="muted">{amount} = 결제 금액, {uid} = 주문번호, {name} = 상품명 으로 치환됩니다. '
+      +'팩마다 다른 주문서를 쓰려면 팩·상품 탭에서 팩별 링크를 넣으세요.</p>'
+      +'<div class="row"><label class="muted">입금 계좌</label>'
+      +'<input id="pay_bank" style="min-width:300px" placeholder="국민 000000-00-000000 예금주" value="'+esc(st.bank)+'"></div>'
+      +'<div class="row"><label class="muted">대기 시간</label>'
+      +'<input class="sm" id="pay_hold" type="number" value="'+esc(st.hold_minutes)+'"> <span class="muted">분 — 이 시간 동안 재고를 잡아둡니다</span></div>'
+      +'<div class="row"><label class="muted">웹훅 시크릿</label>'
+      +'<input id="pay_secret" style="min-width:300px" placeholder="비우면 웹훅 비활성" value="'+esc(st.webhook_secret)+'"></div>'
+      +'<p class="muted">웹훅 주소: <code>'+esc(location.origin+(BASE||'')+'/pay/webhook/blogpay')+'</code> · 헤더 <code>x-pay-secret</code></p>'
+      +'<div class="row"><button onclick="savePay()">결제 설정 저장</button></div></div>';
+
+    if(bad.length) h+='<div class="card"><h3><span class="pill off">확정 실패 '+bad.length+'건</span></h3>'
+      +'<p class="muted" style="margin-top:6px;color:#FF7A7A">입금은 확인됐는데 상품을 만들지 못한 건입니다. '
+      +'정산·정책 탭의 환불 원장에서 환불을 처리하세요.</p>'
+      +payTable(bad,false)+'</div>';
+
+    h+='<div class="card"><h3>입금 대기 <span class="pill '+(pend.length?'off':'on')+'">'+pend.length+'건</span></h3>';
+    if(!pend.length) h+='<p class="muted" style="margin-top:6px">대기 중인 결제가 없습니다.</p>';
+    else h+='<p class="muted" style="margin-top:6px">입금자명과 금액을 확인한 뒤 승인하세요. 승인하면 즉시 개봉·주문이 확정됩니다.</p>'
+      +payTable(pend,true);
+    h+='</div>';
+
+    h+='<div class="card"><h3>전체 결제</h3>'+payTable(ps.slice(0,60),false)+'</div>';
+    $('#view').innerHTML=h;
+  }).catch(function(e){ toast(e.message); });
+}
+
+function payConfirm(uid){
+  if(!confirm(uid+' 입금을 확인 처리할까요? 승인 즉시 상품이 확정됩니다.')) return;
+  var el=document.getElementById('pn_'+uid);
+  api('/admin/payments/'+encodeURIComponent(uid)+'/confirm',{payer_name:el?el.value:''})
+    .then(function(r){toast(r.already?'이미 확정된 건입니다':'확정 완료');renderPay();})
+    .catch(function(e){toast(e.message);});
+}
+function payReject(uid){
+  if(!confirm(uid+' 결제를 반려할까요? 잡아둔 재고가 풀립니다.')) return;
+  api('/admin/payments/'+encodeURIComponent(uid)+'/reject',{reason:'관리자 반려'})
+    .then(function(){toast('반려됨');renderPay();}).catch(function(e){toast(e.message);});
+}
+function savePay(){
+  api('/admin/settings',{
+    pay_provider:document.getElementById('pay_provider').value,
+    pay_link_template:document.getElementById('pay_tpl').value,
+    pay_bank:document.getElementById('pay_bank').value,
+    pay_hold_minutes:document.getElementById('pay_hold').value,
+    pay_webhook_secret:document.getElementById('pay_secret').value
+  }).then(function(){toast('결제 설정 저장됨');renderPay();}).catch(function(e){toast(e.message);});
 }
 
 // ==================== 마켓 (통신판매중개 / 검수) ====================
@@ -619,6 +724,15 @@ function renderSettle(){
     h+='</table></div>';
     $('#view').innerHTML=h;
   }).catch(function(e){ toast(e.message); });
+}
+// 정산 승인 / 이체 완료 / 보류. 서버는 POST /admin/market/payouts/:id/:action 하나로 받는다.
+function payoutAct(id, action){
+  var ask = { approve:'이 건을 정산 승인할까요?', paid:'실제로 이체를 마치셨나요? 지급 완료로 기록합니다.',
+              cancel:'이 정산을 보류로 되돌릴까요? (환불하려면 먼저 보류해야 합니다)' }[action];
+  if(ask && !confirm(ask)) return;
+  api('/admin/market/payouts/'+id+'/'+action,{})
+    .then(function(){ toast({approve:'정산 승인',paid:'지급 완료',cancel:'보류로 전환'}[action]||'처리됨'); renderSettle(); })
+    .catch(function(e){ toast(e.message); });
 }
 function refundDone(id){
   var memo=prompt('실제로 환불을 보내셨나요? 처리 메모를 남겨주세요 (예: 블로그페이에서 취소 처리)','');

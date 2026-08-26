@@ -11,6 +11,22 @@ const get = (p, h) => fetch(B + p, { headers: h || A }).then(r => r.json());
   await new Promise((r) => setTimeout(r, 500));
 
   // 활동 데이터 생성 (유저 가입 + 구매 + 배송)
+  // 0) 관리자 화면 무결성 — 탭이 가리키는 렌더러가 실제로 있는지.
+  // 예전에 renderPay를 넣었다고 착각하고 배포해서 go()가 ReferenceError로 죽었고,
+  // 모든 탭이 빈 화면이 됐다. 문법 검사로는 안 잡히니 참조를 직접 대조한다.
+  const html = fs.readFileSync(__dirname + "/admin.html", "utf8");
+  const viewsBlock = (html.match(/var VIEWS\s*=\s*\{([\s\S]*?)\};/) || [])[1] || "";
+  const referenced = [...viewsBlock.matchAll(/:\s*(render[A-Za-z]+)/g)].map((m) => m[1]);
+  const missing = referenced.filter((fn) => !new RegExp("function\\s+" + fn + "\\s*\\(").test(html));
+  console.log("0. 탭 렌더러:", referenced.length + "개 참조",
+    missing.length ? "FAIL 누락: " + missing.join(", ") : "전부 정의됨 OK");
+  if (missing.length) process.exit(1);
+  // onclick으로 호출하는 전역 함수도 같이 본다 (오타/미삽입 방지)
+  const called = [...html.matchAll(/onclick="([a-zA-Z_$][\w$]*)\(/g)].map((m) => m[1]);
+  const undef = [...new Set(called)].filter((fn) => !new RegExp("function\\s+" + fn + "\\s*\\(").test(html));
+  console.log("0-b. onclick 핸들러:", undef.length ? "FAIL 누락: " + undef.join(", ") : "전부 정의됨 OK");
+  if (undef.length) process.exit(1);
+
   const U = { "Content-Type": "application/json" };
   const { dev_code } = await post("/auth/request-code", { phone: "01099998888" }, U);
   const v = await post("/auth/verify", { phone: "01099998888", code: dev_code, nickname: "테스터" }, U);
