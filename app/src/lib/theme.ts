@@ -31,6 +31,10 @@ export const C = {
   danger: "#E5A3A3",
   dangerLine: "rgba(229,163,163,0.35)",
 
+  // 흑백 베이스에서 "가치"만 금색으로 띄운다 — 등급 프레임과 포인트 값에만 쓴다.
+  gold: "#E3BE68",
+  goldDim: "#8A6F2E",
+
   up: "#FAFAFA",
   down: "#6C6C6C",
 
