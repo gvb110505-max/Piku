@@ -97,7 +97,7 @@ export default function Home() {
         const second = [...o.hits].sort((a, b) => a.probability - b.probability)[1];
         return (
           <Pressable key={o.pack.id} onPress={() => router.push(`/pack/${o.pack.id}`)} style={s.row}>
-            <SlabCard grade={o.pack.sold_out ? "common" : "HIT"} size="sm" />
+            <SlabCard grade={o.pack.sold_out ? "common" : "HIT"} image={o.pack.image} size="sm" />
             <View style={{ flex: 1, gap: 7 }}>
               <Row style={{ justifyContent: "space-between" }}>
                 <Text style={s.packName} numberOfLines={1}>{o.pack.name}</Text>

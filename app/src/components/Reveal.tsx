@@ -55,7 +55,7 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
         <View style={[st.ghost, { transform: [{ rotate: "-4deg" }, { translateY: 4 }], opacity: 0.55 }]} />
 
         <Animated.View style={{ transform: [{ perspective: 900 }, { rotateY }, { scale }] }}>
-          <SlabCard name={result.name} grade={result.grade} points={result.point_value} size="lg" />
+          <SlabCard name={result.name} grade={result.grade} points={result.point_value} image={result.image} size="lg" />
         </Animated.View>
 
         {!opened ? (
@@ -103,20 +103,20 @@ const st = StyleSheet.create({
   stage: { alignItems: "center", justifyContent: "center", width: 280, height: 380 },
   glow: { position: "absolute", width: 320, height: 400, borderRadius: 200, backgroundColor: C.accent },
   ghost: { position: "absolute", width: 236, height: 300, borderRadius: R.lg, backgroundColor: C.surface,
-    borderWidth: 1, borderColor: "rgba(233,233,237,0.08)" },
+    borderWidth: 1, borderColor: C.track },
   cover: { position: "absolute", left: 20, right: 20, top: 30, bottom: 30, alignItems: "center", justifyContent: "center",
-    backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: "rgba(233,233,237,0.10)" },
+    backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.line },
   coverText: { color: C.accent200, fontWeight: "500", fontSize: 15, letterSpacing: 1.5 },
   name: { color: C.text, fontWeight: "500", fontSize: 26, letterSpacing: -0.4, textAlign: "center" },
   sub: { color: C.n500, fontSize: 12.5, textAlign: "center" },
-  bonus: { marginTop: 14, backgroundColor: "rgba(145,132,217,0.16)", borderWidth: 1, borderColor: C.accent,
+  bonus: { marginTop: 14, backgroundColor: C.accentFillStrong, borderWidth: 1, borderColor: C.accent,
     borderRadius: R.md, paddingHorizontal: 16, paddingVertical: 12, alignItems: "center", gap: 3 },
   bonusTitle: { color: C.accent200, fontWeight: "500", fontSize: 10, letterSpacing: 1.4 },
   bonusName: { color: C.text, fontWeight: "500", fontSize: 13 },
   actions: { flexDirection: "row", gap: 10, marginTop: 24, width: "100%" },
   btn: { flex: 1, height: 52, borderRadius: R.pill, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  btnPrimary: { backgroundColor: "rgba(145,132,217,0.14)", borderColor: C.accent },
-  btnGhost: { borderColor: "rgba(233,233,237,0.16)" },
+  btnPrimary: { backgroundColor: C.accentFill, borderColor: C.accent },
+  btnGhost: { borderColor: C.lineStrong },
   btnText: { color: C.accent200, fontWeight: "500", fontSize: 14.5 },
   later: { color: C.n600, fontSize: 12.5 },
 });

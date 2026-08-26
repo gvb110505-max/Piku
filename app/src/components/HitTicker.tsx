@@ -75,7 +75,7 @@ const s = StyleSheet.create({
   wrap: {
     flexDirection: "row", alignItems: "center", gap: 10,
     height: 44, paddingHorizontal: 12, borderRadius: R.md,
-    backgroundColor: C.surface, borderWidth: 1, borderColor: "rgba(145,132,217,0.28)",
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.lineStrong,
   },
   badge: {
     flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0,

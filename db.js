@@ -237,6 +237,14 @@ CREATE TABLE IF NOT EXISTS identity_verifications (
 
 -- 환불 원장. PG 취소는 실패할 수 있으므로 시도를 반드시 기록하고, 성공한 뒤에만
 -- 주문 상태를 refunded로 바꾼다. pg_key 단위 중복 취소를 막는 역할도 겸한다.
+-- 업로드 이미지. 팩/HIT/POINT 카드의 아트를 관리자가 교체할 수 있게 한다.
+-- 본문은 base64로 들고, 참조하는 쪽(packs.image 등)은 "/images/<id>" 경로만 저장한다.
+-- 그래야 /packs 응답이 이미지 때문에 무거워지지 않고, 브라우저가 이미지를 캐시할 수 있다.
+CREATE TABLE IF NOT EXISTS images (
+  id ${ID}, mime TEXT NOT NULL, data TEXT NOT NULL,
+  bytes INTEGER NOT NULL DEFAULT 0, label TEXT, created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS refunds (
   id ${ID}, kind TEXT NOT NULL,              -- pack | market
   order_id INTEGER, order_ref TEXT,

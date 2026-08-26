@@ -29,7 +29,9 @@ app.use((req, res, next) => {
   else if (req.url.startsWith("/api?")) req.url = "/" + req.url.slice(4);
   next();
 });
-app.use(express.json());
+// 이미지는 base64로 들어오므로 기본 100kb 제한으로는 부족하다.
+// 관리자 화면에서 업로드 전에 리사이즈하지만, 서버에서도 상한을 다시 건다.
+app.use(express.json({ limit: "8mb" }));
 // DB 미설정이면 500 크래시 대신 원인을 알려준다
 app.use((req, res, next) => {
   if (!db.ready) {
@@ -43,7 +45,7 @@ app.use((req, res, next) => {
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
-const BUILD = "2026-08-25.1"; // 관리자 페이지 캐시 확인용 빌드 스탬프
+const BUILD = "2026-08-26.1"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
@@ -492,11 +494,12 @@ app.post("/admin/packs/:id/hits", admin, h(async (req, res) => {
   res.json({ id });
 }));
 app.post("/admin/hits/:id", admin, h(async (req, res) => {
-  const { point_value, remaining, total_qty } = req.body;
+  const { point_value, remaining, total_qty, image } = req.body;
   const sets = [], vals = [];
   if (point_value != null) { sets.push("point_value=?"); vals.push(point_value); }
   if (remaining != null) { sets.push("remaining=?"); vals.push(remaining); }
   if (total_qty != null) { sets.push("total_qty=?"); vals.push(total_qty); }
+  if (image != null) { sets.push("image=?"); vals.push(image); }
   if (!sets.length) return res.status(400).json({ error: "NO_FIELDS" });
   vals.push(Number(req.params.id));
   await db.run(`UPDATE hits SET ${sets.join(",")} WHERE id=?`, vals);
@@ -517,6 +520,17 @@ app.post("/admin/packs/:id/pool", admin, h(async (req, res) => {
 }));
 app.post("/admin/pool/:id/delete", admin, h(async (req, res) => {
   await db.run("DELETE FROM point_pool WHERE id=?", [Number(req.params.id)]);
+  res.json({ ok: true });
+}));
+app.post("/admin/pool/:id", admin, h(async (req, res) => {
+  const { image, weight, name } = req.body;
+  const sets = [], vals = [];
+  if (image != null) { sets.push("image=?"); vals.push(image); }
+  if (weight != null) { sets.push("weight=?"); vals.push(weight); }
+  if (name != null) { sets.push("name=?"); vals.push(name); }
+  if (!sets.length) return res.status(400).json({ error: "NO_FIELDS" });
+  vals.push(Number(req.params.id));
+  await db.run(`UPDATE point_pool SET ${sets.join(",")} WHERE id=?`, vals);
   res.json({ ok: true });
 }));
 
@@ -568,6 +582,40 @@ app.post("/admin/users/:id/verify", admin, h(async (req, res) => {
   await recordVerification(u.id, { provider: "admin_manual", birth, name: name || null,
     memo: memo || "관리자 수동 확인" });
   res.json({ ok: true, ...(await ageStatus(u.id)) });
+}));
+
+// ---------- 이미지 ----------
+// 업로드는 관리자만, 조회는 공개(앱이 그대로 <Image src>로 쓴다).
+const IMAGE_MIME = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+
+app.post("/admin/images", admin, h(async (req, res) => {
+  const { data, label } = req.body;
+  // data:image/jpeg;base64,AAAA... 형태만 받는다
+  const m = /^data:([^;,]+);base64,(.+)$/s.exec(String(data || ""));
+  if (!m) return res.status(400).json({ error: "BAD_IMAGE", message: "data:image/...;base64, 형식이어야 합니다." });
+  const [, mime, b64] = m;
+  if (!IMAGE_MIME[mime]) return res.status(400).json({ error: "BAD_MIME", message: "JPEG · PNG · WebP만 올릴 수 있어요." });
+  const bytes = Buffer.byteLength(b64, "base64");
+  if (bytes > MAX_IMAGE_BYTES)
+    return res.status(413).json({ error: "IMAGE_TOO_LARGE", message: `이미지가 너무 큽니다 (${Math.round(bytes / 1024)}KB). 3MB 이하로 올려주세요.` });
+
+  const id = await db.insert(
+    "INSERT INTO images (mime, data, bytes, label, created_at) VALUES (?,?,?,?,?)",
+    [mime, b64, bytes, label || null, db.NOW()]);
+  res.json({ id, url: `/images/${id}`, bytes });
+}));
+
+app.get("/images/:id", h(async (req, res) => {
+  const img = await db.get("SELECT mime, data FROM images WHERE id=?", [Number(req.params.id)]);
+  if (!img) return res.status(404).json({ error: "NOT_FOUND" });
+  // 이미지는 교체 시 새 id를 받으므로 내용이 바뀌지 않는다 → 길게 캐시
+  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.type(img.mime).send(Buffer.from(img.data, "base64"));
+}));
+
+app.get("/admin/images", admin, h(async (req, res) => {
+  res.json(await db.all("SELECT id, mime, bytes, label, created_at FROM images ORDER BY id DESC LIMIT 100"));
 }));
 
 app.get("/admin/refunds", admin, h(async (req, res) => {

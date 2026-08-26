@@ -72,7 +72,7 @@ export default function Sell() {
             </Text>
             {inspFee > 0 ? null : <Text style={{ color: C.accent300, fontSize: 12.5 }}>검수비 무료</Text>}
           </Row>
-          <View style={{ height: 1, backgroundColor: "rgba(233,233,237,0.10)", marginVertical: 14 }} />
+          <View style={{ height: 1, backgroundColor: C.line, marginVertical: 14 }} />
           <View style={{ marginTop: 10, gap: 6 }}>
             <Row style={{ justifyContent: "space-between" }}>
               <Sub>판매가</Sub><Text style={{ color: C.text }}>{won(p)}</Text>

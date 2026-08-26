@@ -102,6 +102,16 @@ export type Inbound = { id: number; inbound_code: string; status: string; pickup
 export type RecentHit = { id: number; name: string; point_value: number; pack_name: string;
   nickname: string; created_at: string };
 
+// 이미지 값은 두 종류가 섞여 있다 — 관리자가 올린 "/images/12" 또는 외부 URL,
+// 그리고 시드 데이터에 남아 있는 "pack_5000" 같은 옛 키. 앞의 것만 실제로 그린다.
+export function imageUrl(v?: string | null): string | null {
+  const s = String(v || "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("/")) return BASE_URL + s;
+  return null;   // 옛 키 → 자리표시 그라디언트를 쓴다
+}
+
 // ---------- 엔드포인트 ----------
 export const Api = {
   requestCode: (phone: string) => api<{ ok: boolean; dev_code?: string }>("/auth/request-code", { body: { phone }, auth: false }),

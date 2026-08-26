@@ -112,7 +112,7 @@ export function Empty({ text }: { text: string }) {
 }
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <Card style={{ borderColor: "rgba(224,140,140,0.35)" }}>
+    <Card style={{ borderColor: C.dangerLine }}>
       <Text style={{ color: C.danger, fontSize: 13, lineHeight: 20 }}>{message}</Text>
       {onRetry ? <Button title="다시 시도" kind="ghost" onPress={onRetry} style={{ marginTop: 14 }} /> : null}
     </Card>
@@ -130,12 +130,12 @@ const s = StyleSheet.create({
   body: { color: C.n400, fontSize: 13, lineHeight: 20 },
   label: { color: C.n600, fontSize: 10, fontWeight: "500", letterSpacing: 1.6, marginBottom: 10, textTransform: "uppercase" },
   card: { backgroundColor: C.surface, borderRadius: R.md, padding: 16, marginTop: 14 },
-  cardPanel: { backgroundColor: "#232532", borderRadius: R.lg, padding: 18, borderWidth: 1, borderColor: "rgba(233,233,237,0.10)" },
-  cardAccent: { backgroundColor: "rgba(145,132,217,0.10)", borderWidth: 1, borderColor: C.accent, borderRadius: R.md },
+  cardPanel: { backgroundColor: C.panel, borderRadius: R.lg, padding: 18, borderWidth: 1, borderColor: C.line },
+  cardAccent: { backgroundColor: C.accentFill, borderWidth: 1, borderColor: C.accent, borderRadius: R.md },
   btn: { borderRadius: R.pill, height: 52, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   btnPrimary: { backgroundColor: C.accentFill, borderWidth: 1, borderColor: C.accent },
-  btnGhost: { borderWidth: 1, borderColor: "rgba(233,233,237,0.16)" },
-  btnDanger: { borderWidth: 1, borderColor: "rgba(224,140,140,0.4)" },
+  btnGhost: { borderWidth: 1, borderColor: C.lineStrong },
+  btnDanger: { borderWidth: 1, borderColor: C.dangerLine },
   btnText: { color: C.accent200, fontWeight: "500", fontSize: 15 },
   input: { backgroundColor: C.surface, borderRadius: R.md, color: C.text, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15 },
   chip: { height: 34, paddingHorizontal: 14, borderRadius: R.pill, borderWidth: 1, justifyContent: "center" },
@@ -143,7 +143,7 @@ const s = StyleSheet.create({
   chipOff: { borderColor: C.line, backgroundColor: C.surface },
   chipText: { fontSize: 12.5, fontWeight: "500" },
   pill: { borderRadius: R.sm, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: C.line, backgroundColor: "rgba(22,24,38,0.72)" },
-  bar: { height: 3, backgroundColor: "rgba(233,233,237,0.08)", borderRadius: 3, overflow: "hidden", marginTop: 8 },
+  bar: { height: 3, backgroundColor: C.track, borderRadius: 3, overflow: "hidden", marginTop: 8 },
   barFill: { height: "100%", backgroundColor: C.accent },
   rule: { height: 1, backgroundColor: C.lineSoft, marginVertical: 4 },
 });

@@ -62,7 +62,7 @@ export default function MyTrades() {
             <Sub key={i} style={{ marginTop: i ? 10 : 0, lineHeight: 20 }}>{i + 1}. {s}</Sub>
           ))}
         </Card>
-        <Card style={{ borderColor: "#4A2A33" }}>
+        <Card style={{ borderColor: C.dangerLine }}>
           <Text style={{ color: C.danger, fontSize: 12, lineHeight: 18 }}>{guide.warning}</Text>
         </Card>
         <Button title="확인" onPress={() => setGuide(null)} style={{ marginTop: 16 }} />

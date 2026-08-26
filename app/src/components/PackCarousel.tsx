@@ -44,7 +44,7 @@ export function PackCarousel({ packs, onOpen }: { packs: Odds[]; onOpen: (id: nu
           <View style={[s.glow, { width: 140, height: 140, borderRadius: 70, right: -10, top: -30, opacity: 0.14 }]} />
 
           <View style={s.heroArt}>
-            <SlabCard grade={p.sold_out ? "common" : "HIT"} size="md" />
+            <SlabCard grade={p.sold_out ? "common" : "HIT"} image={p.image} size="md" />
           </View>
 
           <Text style={s.heroTitle} numberOfLines={2}>{p.name}</Text>
@@ -80,7 +80,7 @@ export function PackCarousel({ packs, onOpen }: { packs: Odds[]; onOpen: (id: nu
           <View style={s.restRow}>
             {rest.slice(0, 3).map((o) => (
               <Pressable key={o.pack.id} onPress={() => onOpen(o.pack.id)} style={s.restCard}>
-                <SlabCard grade={o.pack.sold_out ? "common" : "HIT"} size="md" />
+                <SlabCard grade={o.pack.sold_out ? "common" : "HIT"} image={o.pack.image} size="md" />
                 <Text style={s.restName} numberOfLines={2}>{o.pack.name}</Text>
                 <Text style={[s.restPrice, o.pack.sold_out && { color: C.danger }]}>
                   {o.pack.sold_out ? "SOLD OUT" : won(o.pack.price)}
@@ -97,7 +97,7 @@ export function PackCarousel({ packs, onOpen }: { packs: Odds[]; onOpen: (id: nu
 const s = StyleSheet.create({
   hero: {
     borderRadius: R.lg, padding: 20, overflow: "hidden", minHeight: 258,
-    backgroundColor: "#262a60", borderWidth: 1, borderColor: "rgba(233,233,237,0.10)",
+    backgroundColor: C.panel, borderWidth: 1, borderColor: C.line,
     justifyContent: "flex-end",
   },
   glow: { position: "absolute", backgroundColor: C.accent },
@@ -105,7 +105,7 @@ const s = StyleSheet.create({
   heroTitle: { color: C.text, fontSize: 26, fontWeight: "500", letterSpacing: -0.5, maxWidth: 210 },
   heroHit: { color: C.n400, fontSize: 12.5, marginTop: 8, maxWidth: 220 },
   heroHitPct: { color: C.accent200, fontWeight: "500" },
-  bar: { height: 3, borderRadius: 3, backgroundColor: "rgba(233,233,237,0.10)", overflow: "hidden", marginTop: 14 },
+  bar: { height: 3, borderRadius: 3, backgroundColor: C.line, overflow: "hidden", marginTop: 14 },
   barFill: { height: "100%", backgroundColor: C.accent },
   heroMeta: { color: C.n500, fontSize: 11.5, marginTop: 8 },
   cta: {
@@ -117,7 +117,7 @@ const s = StyleSheet.create({
   dots: { flexDirection: "row", justifyContent: "center", gap: 6 },
   dotBase: { height: 4, borderRadius: 4 },
   dotOn: { width: 18, backgroundColor: C.accent },
-  dotOff: { width: 4, backgroundColor: "rgba(233,233,237,0.18)" },
+  dotOff: { width: 4, backgroundColor: C.lineStrong },
   restRow: { flexDirection: "row", gap: 12 },
   restCard: { flex: 1, gap: 7, alignItems: "center" },
   restName: { color: C.n300, fontSize: 11.5, lineHeight: 16, textAlign: "center" },

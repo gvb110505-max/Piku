@@ -80,7 +80,7 @@ export default function Collection() {
               return (
                 <Pressable key={c.id} onPress={() => (shipMode ? toggle(c.id) : undefined)}>
                   <View style={{ opacity: shipMode && !on ? 0.45 : 1 }}>
-                    <SlabCard name={c.name} grade={c.grade} points={c.point_value} size="sm" />
+                    <SlabCard name={c.name} grade={c.grade} points={c.point_value} image={c.image} size="sm" />
                   </View>
                   {shipMode ? (
                     <View style={{ position: "absolute", top: 6, right: 6 }}>
