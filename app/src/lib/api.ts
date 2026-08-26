@@ -98,6 +98,9 @@ export type MarketOrder = { id: number; order_uid: string; listing_id: number; t
   out_tracking: string | null; fail_reason: string | null; created_at: string;
   seller_nickname?: string; buyer_nickname?: string; inbound?: Inbound | null };
 export type Inbound = { id: number; inbound_code: string; status: string; pickup_address: string; pickup_date: string | null };
+// 홈 상단 티커용 실시간 HIT 피드. 닉네임은 서버에서 마스킹돼 온다.
+export type RecentHit = { id: number; name: string; point_value: number; pack_name: string;
+  nickname: string; created_at: string };
 
 // ---------- 엔드포인트 ----------
 export const Api = {
@@ -107,6 +110,7 @@ export const Api = {
 
   packs: () => api<Odds[]>("/packs", { auth: false }),
   pack: (id: number) => api<Odds>(`/packs/${id}`, { auth: false }),
+  recentHits: (limit = 20) => api<RecentHit[]>(`/packs/recent-hits?limit=${limit}`, { auth: false }),
 
   purchase: (pack_id: number, amount: number) =>
     api<{ order_id: number; result: DrawResult }>("/purchase", { body: { pack_id, amount, method: "toss" } }),

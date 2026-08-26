@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
-const BUILD = "2026-08-24.9"; // 관리자 페이지 캐시 확인용 빌드 스탬프
+const BUILD = "2026-08-25.1"; // 관리자 페이지 캐시 확인용 빌드 스탬프
 const MINOR_DAILY_LIMIT = 100000; // 만 19세 미만 일 결제 한도
 
 async function auth(req, res, next) {
@@ -273,6 +273,25 @@ app.get("/packs", h(async (req, res) => {
   const ids = await db.all("SELECT id FROM packs ORDER BY id");
   res.json(await Promise.all(ids.map((p) => getOdds(p.id))));
 }));
+
+// 실시간 HIT 당첨 피드 — 홈 상단 티커용. 닉네임은 마스킹해서 내려준다.
+// /packs/:id 보다 먼저 등록해야 한다 (안 그러면 "recent-hits"가 :id로 매칭됨).
+function maskNickname(n) {
+  const s = String(n || "트레이너");
+  return s.length <= 1 ? s + "*" : s[0] + "*".repeat(Math.min(2, s.length - 1));
+}
+app.get("/packs/recent-hits", h(async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+  const rows = await db.all(
+    `SELECT c.id, c.name, c.point_value, c.pack_name, c.created_at, u.nickname
+     FROM owned_cards c JOIN users u ON u.id = c.user_id
+     WHERE c.grade = 'HIT' ORDER BY c.id DESC LIMIT ${limit}`);
+  res.json(rows.map((r) => ({
+    id: r.id, name: r.name, point_value: r.point_value,
+    pack_name: r.pack_name, nickname: maskNickname(r.nickname), created_at: r.created_at,
+  })));
+}));
+
 app.get("/packs/:id", h(async (req, res) => {
   const o = await getOdds(Number(req.params.id));
   if (!o) return res.status(404).json({ error: "NOT_FOUND" });
