@@ -78,7 +78,7 @@ function messageOf(d: any): string | null {
 
 // ---------- 타입 ----------
 export type Pack = {
-  id: number; name: string; price: number; point_price: number; is_welcome: boolean;
+  id: number; name: string; price: number; list_price: number | null; point_price: number; is_welcome: boolean;
   image: string; total_slots: number; sold_slots: number; remaining_slots: number;
   sold_out: boolean; active: boolean;
 };

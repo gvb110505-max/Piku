@@ -283,9 +283,9 @@ async function seed() {
   const cnt = await c.get("SELECT COUNT(*) AS c FROM packs");
   if (Number(cnt.c) > 0) return;
 
-  const pack = (name, price, pp, w, slots, img) =>
-    c.insert("INSERT INTO packs (name, price, point_price, is_welcome, total_slots, image) VALUES (?,?,?,?,?,?)",
-      [name, price, pp, w, slots, img]);
+  const pack = (name, price, pp, w, slots, img, listPrice) =>
+    c.insert("INSERT INTO packs (name, price, point_price, is_welcome, total_slots, image, list_price) VALUES (?,?,?,?,?,?,?)",
+      [name, price, pp, w, slots, img, listPrice || null]);
   const hit = (pid, name, img, qty, pv, cost) =>
     c.run("INSERT INTO hits (pack_id, name, grade, image, total_qty, remaining, point_value, cost) VALUES (?,?,'HIT',?,?,?,?,?)",
       [pid, name, img, qty, qty, pv, cost]);
@@ -294,19 +294,19 @@ async function seed() {
   const pool = (pid, name, r, img, w) =>
     c.run("INSERT INTO point_pool (pack_id, name, rarity, image, weight) VALUES (?,?,?,?,?)", [pid, name, r, img, w]);
 
-  const p5 = await pack("스타터 랜덤팩", 5000, 0, 0, 200, "pack_5000");
+  const p5 = await pack("스타터 랜덤팩", 5000, 0, 0, 200, "pack_5000", 8000);
   await hit(p5, "피카츄 AR", "pikachu_ar", 5, 25000, 28000);
   await hit(p5, "이브이 SR", "eevee_sr", 3, 40000, 45000);
   await hit(p5, "리자몽 EX", "charizard_ex", 1, 120000, 130000);
   for (const n of [50, 100, 150, 200]) await g(p5, n, "[JP] 메가 하이클래스팩 박스", "box_mega", 60000);
 
-  const p10 = await pack("레귤러 랜덤팩", 10000, 0, 0, 300, "pack_10000");
+  const p10 = await pack("레귤러 랜덤팩", 10000, 0, 0, 300, "pack_10000", 14000);
   await hit(p10, "뮤 EX", "mew_ex", 4, 60000, 70000);
   await hit(p10, "리자몽 SAR", "charizard_sar", 2, 180000, 200000);
   await hit(p10, "이상해꽃 SAR", "venusaur_sar", 2, 90000, 100000);
   for (const n of [75, 150, 225, 300]) await g(p10, n, "[JP] 하이클래스팩 박스 ×2", "box_double", 120000);
 
-  const p50 = await pack("프리미엄 랜덤팩", 50000, 0, 0, 100, "pack_50000");
+  const p50 = await pack("프리미엄 랜덤팩", 50000, 0, 0, 100, "pack_50000", 65000);
   await hit(p50, "리자몽 SAR (PSA10)", "charizard_psa10", 1, 900000, 950000);
   await hit(p50, "뮤츠 UR", "mewtwo_ur", 2, 350000, 380000);
   await hit(p50, "피카츄 프로모", "pikachu_promo", 5, 120000, 130000);
@@ -329,6 +329,25 @@ async function seed() {
 const ready = usePg || sqliteAvailable; // DB 사용 가능 여부
 
 let _ready = null;
+// 컬럼 추가 마이그레이션. CREATE TABLE IF NOT EXISTS는 기존 테이블에 컬럼을
+// 붙여주지 않으므로, 추가되는 컬럼은 여기서 멱등하게 ALTER 한다.
+// 이미 있으면 DB가 에러를 내는데 그건 정상이라 삼킨다.
+const ADD_COLUMNS = [
+  // 정가 — 할인 표시용. 비어 있으면 할인 UI를 띄우지 않는다.
+  ["packs", "list_price", "INTEGER"],
+];
+async function migrate() {
+  for (const [table, col, type] of ADD_COLUMNS) {
+    const sql = `ALTER TABLE ${table} ADD COLUMN ${col} ${type}`;
+    try {
+      if (usePg) await pgPool().query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col} ${type}`);
+      else sqlite().exec(sql);
+    } catch (e) {
+      if (!/duplicate column|already exists/i.test(String(e && e.message))) throw e;
+    }
+  }
+}
+
 function init() {
   if (!ready) return Promise.reject(Object.assign(new Error("NO_DATABASE"),
     { hint: "DATABASE_URL 환경변수를 설정해 Postgres를 연결하세요 (Vercel: Storage → Postgres)." }));
@@ -339,6 +358,7 @@ function init() {
     } else {
       sqlite().exec(SCHEMA);
     }
+    await migrate();
     await seed();
   })();
   return _ready;

@@ -475,7 +475,7 @@ app.post("/admin/packs", admin, h(async (req, res) => {
   res.json({ id });
 }));
 app.post("/admin/packs/:id", admin, h(async (req, res) => {
-  const allowed = ["name", "price", "point_price", "total_slots", "active", "image"];
+  const allowed = ["name", "price", "point_price", "total_slots", "active", "image", "list_price"];
   const sets = [], vals = [];
   for (const k of allowed) if (req.body[k] != null) { sets.push(`${k}=?`); vals.push(req.body[k]); }
   if (!sets.length) return res.status(400).json({ error: "NO_FIELDS" });

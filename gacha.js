@@ -16,7 +16,8 @@ async function getOdds(packId) {
   const nextG = guaranteed.find((g) => !g.awarded && g.slot_no > pack.sold_slots);
   if (nextG) nextG.next = true;
   return {
-    pack: { id: pack.id, name: pack.name, price: pack.price, point_price: pack.point_price,
+    pack: { id: pack.id, name: pack.name, price: pack.price, list_price: pack.list_price || null,
+            point_price: pack.point_price,
             is_welcome: !!pack.is_welcome, image: pack.image,
             total_slots: pack.total_slots, sold_slots: pack.sold_slots,
             remaining_slots: remainingSlots, sold_out: soldOut, active: !!pack.active && !soldOut },
