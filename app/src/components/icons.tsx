@@ -62,3 +62,36 @@ export const IconAlert = ({ size = 18, color = C.accent200 }: P) => (
     <Path {...stroke(color)} d="M12 7.8v5" /><Path {...stroke(color)} d="M12 15.8v.4" />
   </Svg>
 );
+
+// 홈 숏컷용 — 라인 규격은 위와 동일하게 맞춘다
+export const IconChart = ({ size = 22, color = C.n200 }: P) => (
+  <Svg {...base(size)}>
+    <Path {...stroke(color)} d="M4 19V5" /><Path {...stroke(color)} d="M4 19h16" />
+    <Path {...stroke(color)} d="M7.5 15l3.5-4 3 2.5 4.5-6" />
+  </Svg>
+);
+export const IconGift = ({ size = 22, color = C.n200 }: P) => (
+  <Svg {...base(size)}>
+    <Rect {...stroke(color)} x={3.5} y={9} width={17} height={11} rx={1.4} />
+    <Path {...stroke(color)} d="M2.8 9h18.4" /><Path {...stroke(color)} d="M12 9v11" />
+    <Path {...stroke(color)} d="M12 9C10.6 6 9.4 4.5 8 4.5A2 2 0 008 8.5h4" />
+    <Path {...stroke(color)} d="M12 9c1.4-3 2.6-4.5 4-4.5a2 2 0 010 4h-4" />
+  </Svg>
+);
+export const IconPercent = ({ size = 22, color = C.n200 }: P) => (
+  <Svg {...base(size)}>
+    <Circle {...stroke(color)} cx={7.6} cy={7.6} r={2.6} />
+    <Circle {...stroke(color)} cx={16.4} cy={16.4} r={2.6} />
+    <Path {...stroke(color)} d="M18.5 5.5l-13 13" />
+  </Svg>
+);
+export const IconCoin = ({ size = 22, color = C.n200 }: P) => (
+  <Svg {...base(size)}>
+    <Circle {...stroke(color)} cx={12} cy={12} r={8.4} />
+    <Path {...stroke(color)} d="M14.4 9.2a2.8 2.8 0 00-4.8 1.9c0 2.4 4.8 1.5 4.8 3.8a2.8 2.8 0 01-4.8 1.9" />
+    <Path {...stroke(color)} d="M12 6.6v10.8" />
+  </Svg>
+);
+export const IconChevron = ({ size = 16, color = C.n500 }: P) => (
+  <Svg {...base(size)}><Path {...stroke(color)} d="M9.5 5l7 7-7 7" /></Svg>
+);

@@ -9,7 +9,7 @@ import { View, Text, Modal, Pressable, Linking, ActivityIndicator, StyleSheet } 
 import * as Clipboard from "expo-clipboard";
 import { Button, Sub, ErrorBox } from "@/components/ui";
 import { Api, Checkout, ApiError } from "@/lib/api";
-import { C, R, won, NUM, MONO } from "@/lib/theme";
+import { C, R, T, won, NUM, MONO } from "@/lib/theme";
 
 const POLL_MS = 3000;
 
@@ -177,21 +177,21 @@ const st = StyleSheet.create({
     borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, padding: 20, paddingBottom: 34,
     borderTopWidth: 1, borderTopColor: C.line },
   handle: { width: 38, height: 4, borderRadius: 4, backgroundColor: C.n600, alignSelf: "center", marginBottom: 18 },
-  eyebrow: { color: C.n600, fontSize: 10, fontWeight: "500", letterSpacing: 1.6 },
-  title: { color: C.n300, fontSize: 14, marginTop: 8 },
-  amount: { ...NUM, color: C.text, fontSize: 30, fontWeight: "600", marginTop: 2, letterSpacing: -0.5 },
+  eyebrow: { ...T, color: C.n600, fontSize: 9.5, fontWeight: "500", letterSpacing: 1.4 },
+  title: { ...T, color: C.n300, fontSize: 13, marginTop: 7 },
+  amount: { ...NUM, color: C.text, fontSize: 26, fontWeight: "600", marginTop: 2, letterSpacing: -0.5 },
 
   uidBox: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 18, padding: 14,
     borderRadius: R.md, borderWidth: 1, borderColor: C.lineStrong, backgroundColor: C.panelDeep },
-  uidLabel: { color: C.n600, fontSize: 10, letterSpacing: 1.2 },
-  uid: { ...MONO, color: C.text, fontSize: 22, fontWeight: "600", letterSpacing: 3, marginTop: 4 },
-  copy: { color: C.n300, fontSize: 12.5, fontWeight: "500" },
+  uidLabel: { ...T, color: C.n600, fontSize: 9.5, letterSpacing: 1.2 },
+  uid: { ...MONO, color: C.text, fontSize: 20, fontWeight: "600", letterSpacing: 2.5, marginTop: 4 },
+  copy: { ...T, color: C.n300, fontSize: 12, fontWeight: "500" },
 
   info: { marginTop: 14, padding: 14, borderRadius: R.md, backgroundColor: C.panelDeep },
-  infoLabel: { color: C.n600, fontSize: 10, letterSpacing: 1.2 },
-  infoValue: { ...MONO, color: C.text, fontSize: 15, marginTop: 5 },
+  infoLabel: { ...T, color: C.n600, fontSize: 9.5, letterSpacing: 1.2 },
+  infoValue: { ...MONO, color: C.text, fontSize: 14, marginTop: 5 },
 
   waiting: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 20, marginBottom: 10 },
-  waitText: { color: C.n300, fontSize: 13, flex: 1 },
-  timer: { ...NUM, color: C.n400, fontSize: 13 },
+  waitText: { ...T, color: C.n300, fontSize: 12.5, flex: 1 },
+  timer: { ...NUM, color: C.n400, fontSize: 12.5 },
 });

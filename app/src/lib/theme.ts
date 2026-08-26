@@ -56,8 +56,17 @@ export const ART = {
 
 export const R = { sm: 6, md: 12, lg: 18, pill: 9999 } as const;
 
+// 본문 서체. 한글이 또렷하게 떨어지는 스택으로 고정한다 —
+// 웹 기본 스택은 환경에 따라 굴림/DejaVu로 떨어져서 지저분해 보인다.
+export const FONT = Platform.select({
+  ios: "System",
+  android: "sans-serif",
+  default: "Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', Roboto, sans-serif",
+}) as string;
+export const T: TextStyle = { fontFamily: FONT };
+
 // 숫자는 항상 등폭으로. 값이 바뀔 때 자릿수가 흔들리면 "살아 있는 수치"로 읽히지 않는다.
-export const NUM: TextStyle = { fontVariant: ["tabular-nums"] };
+export const NUM: TextStyle = { fontFamily: FONT, fontVariant: ["tabular-nums"] };
 // 주문번호·코드처럼 사람이 그대로 옮겨 적는 문자열
 export const MONO: TextStyle = {
   fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "ui-monospace, Menlo, monospace" }),

@@ -9,7 +9,7 @@ import { CollectionCard, CardGroup } from "@/components/CollectionCard";
 import { IconTruck } from "@/components/icons";
 import { Api, ApiError, OwnedCard } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { C, R, NUM, won, pt } from "@/lib/theme";
+import { C, R, T, NUM, won, pt } from "@/lib/theme";
 
 const SHIP_FEE = 3500;
 const STATUS: Record<string, string> = {
@@ -162,19 +162,19 @@ export default function Collection() {
 
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  balanceText: { ...NUM, color: C.n300, fontSize: 13, fontWeight: "500" },
+  balanceText: { ...NUM, color: C.n300, fontSize: 12, fontWeight: "500" },
   countRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline",
     marginTop: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.lineSoft },
-  count: { ...NUM, color: C.n500, fontSize: 12.5 },
-  selCount: { ...NUM, color: C.text, fontSize: 12.5, fontWeight: "600" },
+  count: { ...NUM, color: C.n500, fontSize: 11.5 },
+  selCount: { ...NUM, color: C.text, fontSize: 11.5, fontWeight: "600" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 18 },
-  pastName: { color: C.n400, fontSize: 13, flex: 1 },
+  pastName: { ...T, color: C.n400, fontSize: 12.5, flex: 1 },
 
   actions: { position: "absolute", left: 20, right: 20, bottom: 20, flexDirection: "row", gap: 10 },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     height: 50, borderRadius: R.pill, backgroundColor: C.accent },
   actionAlt: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.lineStrong },
-  actionText: { color: C.onAccent, fontSize: 14, fontWeight: "600" },
+  actionText: { ...T, color: C.onAccent, fontSize: 13.5, fontWeight: "600" },
   coin: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: C.onAccent },
 
   backdrop: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.66)" },

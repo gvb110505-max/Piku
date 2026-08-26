@@ -5,7 +5,7 @@ import {
   ViewStyle, TextStyle, ScrollView, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { C, R } from "@/lib/theme";
+import { C, R, T } from "@/lib/theme";
 
 export function Screen({ children, scroll, onRefresh, refreshing, style }: {
   children: React.ReactNode; scroll?: boolean; onRefresh?: () => void; refreshing?: boolean; style?: ViewStyle;
@@ -87,7 +87,7 @@ export function Pill({ text, tone = "neutral" }: { text: string; tone?: "accent"
   const fg = tone === "accent" ? C.accent200 : tone === "danger" ? C.danger : C.n300;
   return (
     <View style={[s.pill, tone === "accent" && { borderColor: C.accent, backgroundColor: C.accentFillStrong }]}>
-      <Text style={{ color: fg, fontSize: 10, fontWeight: "500", letterSpacing: 0.5 }}>{text}</Text>
+      <Text style={{ ...T, color: fg, fontSize: 10, fontWeight: "500", letterSpacing: 0.4 }}>{text}</Text>
     </View>
   );
 }
@@ -113,7 +113,7 @@ export function Empty({ text }: { text: string }) {
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <Card style={{ borderColor: C.dangerLine }}>
-      <Text style={{ color: C.danger, fontSize: 13, lineHeight: 20 }}>{message}</Text>
+      <Text style={{ ...T, color: C.danger, fontSize: 12.5, lineHeight: 19 }}>{message}</Text>
       {onRetry ? <Button title="다시 시도" kind="ghost" onPress={onRetry} style={{ marginTop: 14 }} /> : null}
     </Card>
   );
@@ -124,24 +124,24 @@ export function Row({ children, style }: { children: React.ReactNode; style?: Vi
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  h1: { color: C.text, fontSize: 24, fontWeight: "500", letterSpacing: -0.3 },
-  h2: { color: C.text, fontSize: 17, fontWeight: "500" },
-  sub: { color: C.n500, fontSize: 12, lineHeight: 18 },
-  body: { color: C.n400, fontSize: 13, lineHeight: 20 },
-  label: { color: C.n600, fontSize: 10, fontWeight: "500", letterSpacing: 1.6, marginBottom: 10, textTransform: "uppercase" },
+  h1: { ...T, color: C.text, fontSize: 21, fontWeight: "600", letterSpacing: -0.4 },
+  h2: { ...T, color: C.text, fontSize: 15, fontWeight: "600", letterSpacing: -0.2 },
+  sub: { ...T, color: C.n500, fontSize: 11.5, lineHeight: 17 },
+  body: { ...T, color: C.n400, fontSize: 12.5, lineHeight: 19 },
+  label: { ...T, color: C.n600, fontSize: 10, fontWeight: "500", letterSpacing: 1.4, marginBottom: 10, textTransform: "uppercase" },
   card: { backgroundColor: C.surface, borderRadius: R.md, padding: 16, marginTop: 14 },
   cardPanel: { backgroundColor: C.panel, borderRadius: R.lg, padding: 18, borderWidth: 1, borderColor: C.line },
   cardAccent: { backgroundColor: C.accentFill, borderWidth: 1, borderColor: C.accent, borderRadius: R.md },
-  btn: { borderRadius: R.pill, height: 52, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
+  btn: { borderRadius: R.pill, height: 48, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   btnPrimary: { backgroundColor: C.accentFill, borderWidth: 1, borderColor: C.accent },
   btnGhost: { borderWidth: 1, borderColor: C.lineStrong },
   btnDanger: { borderWidth: 1, borderColor: C.dangerLine },
-  btnText: { color: C.accent200, fontWeight: "500", fontSize: 15 },
-  input: { backgroundColor: C.surface, borderRadius: R.md, color: C.text, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15 },
+  btnText: { ...T, color: C.accent200, fontWeight: "600", fontSize: 14 },
+  input: { ...T, backgroundColor: C.surface, borderRadius: R.md, color: C.text, paddingHorizontal: 16, paddingVertical: 13, fontSize: 14 },
   chip: { height: 34, paddingHorizontal: 14, borderRadius: R.pill, borderWidth: 1, justifyContent: "center" },
   chipOn: { borderColor: C.accent, backgroundColor: C.accentFillStrong },
   chipOff: { borderColor: C.line, backgroundColor: C.surface },
-  chipText: { fontSize: 12.5, fontWeight: "500" },
+  chipText: { ...T, fontSize: 12, fontWeight: "500" },
   pill: { borderRadius: R.sm, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: C.line, backgroundColor: "rgba(22,24,38,0.72)" },
   bar: { height: 3, backgroundColor: C.track, borderRadius: 3, overflow: "hidden", marginTop: 8 },
   barFill: { height: "100%", backgroundColor: C.accent },

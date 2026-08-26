@@ -6,7 +6,7 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { C, R, NUM, gradeLabel } from "@/lib/theme";
+import { C, R, T, NUM, gradeLabel } from "@/lib/theme";
 import { imageUrl } from "@/lib/api";
 
 export type CardGroup = {
@@ -52,11 +52,11 @@ const st = StyleSheet.create({
   fill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
 
   blank: { flex: 1, alignItems: "center", justifyContent: "center" },
-  blankText: { color: C.artLabel, fontSize: 11 },
+  blankText: { ...T, color: C.artLabel, fontSize: 10.5 },
 
   hitTag: { position: "absolute", top: 0, left: 0, paddingHorizontal: 6, paddingVertical: 3,
     backgroundColor: "rgba(10,10,10,0.82)" },
-  hitTagText: { color: C.gold, fontSize: 9, fontWeight: "600", letterSpacing: 1 },
+  hitTagText: { ...T, color: C.gold, fontSize: 8.5, fontWeight: "600", letterSpacing: 0.8 },
 
   qty: { ...NUM, position: "absolute", bottom: 6, right: 7, color: C.text, fontSize: 12, fontWeight: "600",
     textShadowColor: "rgba(0,0,0,0.9)", textShadowRadius: 4 },
@@ -65,6 +65,6 @@ const st = StyleSheet.create({
     backgroundColor: "rgba(10,10,10,0.72)", alignItems: "center", justifyContent: "center" },
   checkMark: { color: C.text, fontSize: 26, fontWeight: "600" },
 
-  name: { color: C.n300, fontSize: 12.5, lineHeight: 17, marginTop: 9 },
-  value: { ...NUM, color: C.n500, fontSize: 12, fontWeight: "600", marginTop: 4 },
+  name: { ...T, color: C.n300, fontSize: 12, lineHeight: 16, marginTop: 8 },
+  value: { ...NUM, color: C.n500, fontSize: 11.5, fontWeight: "600", marginTop: 4 },
 });

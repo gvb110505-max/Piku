@@ -3,7 +3,7 @@
 // 닉네임은 서버에서 마스킹돼서 온다.
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { C, NUM, pt } from "@/lib/theme";
+import { C, T, NUM, pt } from "@/lib/theme";
 import { RecentHit } from "@/lib/api";
 
 function ago(iso: string) {
@@ -32,9 +32,9 @@ export function HitFeed({ hits, limit = 4 }: { hits: RecentHit[]; limit?: number
 
 const st = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10,
-    paddingVertical: 11, borderTopWidth: 1, borderTopColor: C.lineSoft },
-  who: { color: C.n500, fontSize: 12, width: 46 },
-  name: { color: C.n200, fontSize: 13, flex: 1 },
-  value: { ...NUM, color: C.gold, fontSize: 12.5, fontWeight: "600" },
-  time: { ...NUM, color: C.n600, fontSize: 10.5, width: 44, textAlign: "right" },
+    paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.lineSoft },
+  who: { ...T, color: C.n500, fontSize: 11, width: 42 },
+  name: { ...T, color: C.n200, fontSize: 12.5, flex: 1 },
+  value: { ...NUM, color: C.gold, fontSize: 12, fontWeight: "600" },
+  time: { ...NUM, color: C.n600, fontSize: 10, width: 42, textAlign: "right" },
 });
