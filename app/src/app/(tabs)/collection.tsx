@@ -3,6 +3,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import { H1, H2, Sub, Card, Button, Field, Pill, Empty, ErrorBox, Row } from "@/components/ui";
 import { CollectionCard, CardGroup } from "@/components/CollectionCard";
@@ -131,8 +132,11 @@ export default function Collection() {
       {hasSel ? (
         <View style={st.actions}>
           <Pressable onPress={exchange} style={st.actionBtn}>
-            <View style={st.coin} />
-            <Text style={st.actionText}>{pt(selectedValue)} 변환</Text>
+            <LinearGradient colors={[C.brand, C.brand2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={st.actionFill}>
+              <View style={st.coin} />
+              <Text style={st.actionText}>{pt(selectedValue)} 변환</Text>
+            </LinearGradient>
           </Pressable>
           <Pressable onPress={() => setShipOpen(true)} style={[st.actionBtn, st.actionAlt]}>
             <IconTruck size={16} color={C.text} />
@@ -162,7 +166,7 @@ export default function Collection() {
 
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  balanceText: { ...NUM, color: C.n300, fontSize: 12, fontWeight: "500" },
+  balanceText: { ...NUM, color: C.hit, fontSize: 12, fontWeight: "700" },
   countRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline",
     marginTop: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.lineSoft },
   count: { ...NUM, color: C.n500, fontSize: 11.5 },
@@ -172,10 +176,12 @@ const st = StyleSheet.create({
 
   actions: { position: "absolute", left: 20, right: 20, bottom: 20, flexDirection: "row", gap: 10 },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    height: 50, borderRadius: R.pill, backgroundColor: C.accent },
-  actionAlt: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.lineStrong },
-  actionText: { ...T, color: C.onAccent, fontSize: 13.5, fontWeight: "600" },
-  coin: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: C.onAccent },
+    height: 50, borderRadius: R.pill, overflow: "hidden" },
+  actionFill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  actionAlt: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.lineStrong, overflow: "visible" },
+  actionText: { ...T, color: C.onBrand, fontSize: 13.5, fontWeight: "700" },
+  coin: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: C.onBrand },
 
   backdrop: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.66)" },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: C.surface,

@@ -3,7 +3,8 @@
 import React from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { C, R, T, NUM, won } from "@/lib/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { C, R, T, NUM, won, packHue } from "@/lib/theme";
 import { Listing, imageUrl } from "@/lib/api";
 
 const W = 132;
@@ -19,12 +20,17 @@ export function MarketRail({ items, shippingFee, onOpen }: {
       contentContainerStyle={{ paddingHorizontal: PAD, gap: 12 }}>
       {items.map((l) => {
         const src = imageUrl(l.images?.[0]);
+        const [h1, h2] = packHue(l.id);
         return (
           <Pressable key={l.id} onPress={() => onOpen(l.id)}
             style={({ pressed }) => [{ width: W }, pressed && { opacity: 0.75 }]}>
             <View style={st.thumb}>
-              {src ? <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={140} />
-                : <Text style={st.blank}>{l.kind === "box" ? "BOX" : "SINGLE"}</Text>}
+              {src ? <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={140} /> : (
+                <>
+                  <LinearGradient colors={[h1, h2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.fill} />
+                  <Text style={st.blank}>{l.kind === "box" ? "BOX" : "SINGLE"}</Text>
+                </>
+              )}
             </View>
             <Text style={st.title} numberOfLines={2}>{l.title}</Text>
             <Text style={st.price}>{won(l.ask_price)}</Text>
@@ -37,12 +43,11 @@ export function MarketRail({ items, shippingFee, onOpen }: {
 }
 
 const st = StyleSheet.create({
-  thumb: { width: W, height: W * 1.3, borderRadius: R.sm, overflow: "hidden",
-    borderWidth: 1, borderColor: C.line, backgroundColor: C.panel,
-    alignItems: "center", justifyContent: "center" },
+  thumb: { width: W, height: W * 1.3, borderRadius: R.md, overflow: "hidden",
+    backgroundColor: C.panel, alignItems: "center", justifyContent: "center" },
   fill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
-  blank: { ...T, color: C.artLabel, fontSize: 9.5, letterSpacing: 1.2 },
+  blank: { ...T, color: "rgba(255,255,255,0.86)", fontSize: 10, fontWeight: "700", letterSpacing: 1.4 },
   title: { ...T, color: C.n200, fontSize: 12, lineHeight: 16, marginTop: 8 },
-  price: { ...NUM, color: C.text, fontSize: 13.5, fontWeight: "600", marginTop: 4 },
+  price: { ...NUM, color: C.text, fontSize: 13.5, fontWeight: "700", marginTop: 4 },
   total: { ...NUM, color: C.n600, fontSize: 10, marginTop: 2 },
 });

@@ -1,14 +1,17 @@
 // 홈 히어로 캐러셀.
 //
 // 커머스 앱의 큰 배너 자리. 문구는 얹지 않고 그 팩의 실제 정보만 둔다 — 이름 · 가격 · 남은 수량.
-// 확률은 배너에 적지 않는다(상세에서 표로 본다). 이미지가 없어도 빈 회색 상자로 두지 않는다.
+// 확률은 배너에 적지 않는다(상세에서 표로 본다).
+// 이미지가 아직 없는 팩은 회색으로 두지 않고 팩 고유색 그라디언트로 채운다 —
+// packHue가 id로 고정되니 같은 팩은 언제 봐도 같은 색이다.
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, Pressable, ScrollView, StyleSheet,
   NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
-import { C, R, T, NUM, won } from "@/lib/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { C, R, T, NUM, won, packHue } from "@/lib/theme";
 import { Odds, imageUrl } from "@/lib/api";
 
 const AUTO_MS = 5000;
@@ -60,6 +63,7 @@ export function HomeHero({ packs, onOpen }: { packs: Odds[]; onOpen: (id: number
         {packs.map((o) => {
           const p = o.pack;
           const src = imageUrl(p.image);
+          const [h1, h2] = packHue(p.id);
           return (
             <Pressable key={p.id} onPress={() => onOpen(p.id)}
               style={({ pressed }) => [st.slide, { width: slideW }, pressed && { opacity: 0.85 }]}>
@@ -67,13 +71,28 @@ export function HomeHero({ packs, onOpen }: { packs: Odds[]; onOpen: (id: number
                 <>
                   <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={180} />
                   {/* 사진 위 글자가 읽히도록 아래쪽에만 어둠을 겹친다 */}
-                  <View style={[st.scrim, { top: "35%", opacity: 0.45 }]} />
-                  <View style={[st.scrim, { top: "60%", opacity: 0.6 }]} />
+                  <View style={[st.scrim, { top: "30%", opacity: 0.5 }]} />
+                  <View style={[st.scrim, { top: "58%", opacity: 0.68 }]} />
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <LinearGradient colors={[h1, h2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.fill} />
+                  {/* 색 위에서도 글자가 또렷하게 — 아래쪽만 눌러준다 */}
+                  <LinearGradient colors={["transparent", "rgba(8,8,10,0.82)"]}
+                    start={{ x: 0, y: 0.15 }} end={{ x: 0, y: 1 }} style={st.fill} />
+                  <Text style={[st.ghostTier, { color: "rgba(255,255,255,0.16)" }]}>
+                    {Math.round(p.price / 1000)}K
+                  </Text>
+                </>
+              )}
 
               <View style={st.slideTop}>
-                <Text style={st.badge}>{p.sold_out ? "판매 종료" : "판매 중"}</Text>
+                <View style={[st.badge, p.sold_out
+                  ? { borderColor: C.lineStrong, backgroundColor: "rgba(8,8,10,0.55)" }
+                  : { borderColor: "rgba(255,255,255,0.5)", backgroundColor: "rgba(8,8,10,0.42)" }]}>
+                  <View style={[st.badgeDot, { backgroundColor: p.sold_out ? C.n500 : C.up }]} />
+                  <Text style={st.badgeText}>{p.sold_out ? "판매 종료" : "판매 중"}</Text>
+                </View>
               </View>
 
               <View style={st.slideBody}>
@@ -111,24 +130,26 @@ const st = StyleSheet.create({
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: "#000" },
 
   slideTop: { padding: 13 },
-  badge: { ...T, alignSelf: "flex-start", color: C.n300, fontSize: 9.5, letterSpacing: 0.8,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.sm,
-    borderWidth: 1, borderColor: C.lineStrong, backgroundColor: "rgba(10,10,10,0.5)", overflow: "hidden" },
+  badge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start",
+    paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill, borderWidth: 1 },
+  badgeDot: { width: 5, height: 5, borderRadius: 5 },
+  badgeText: { ...T, color: C.text, fontSize: 10, fontWeight: "600", letterSpacing: 0.4 },
+  ghostTier: { ...NUM, position: "absolute", right: 16, top: 30, fontSize: 64, fontWeight: "700" },
 
   slideBody: { padding: 16 },
   name: { ...T, color: C.text, fontSize: 17, fontWeight: "600", letterSpacing: -0.4 },
-  price: { ...NUM, color: C.n200, fontSize: 13, marginTop: 4 },
+  price: { ...NUM, color: C.text, fontSize: 14, fontWeight: "600", marginTop: 4 },
 
   metrics: { flexDirection: "row", alignItems: "baseline", gap: 5, marginTop: 12 },
   mLabel: { ...T, color: C.n500, fontSize: 10.5, marginRight: 2 },
-  mValue: { ...NUM, color: C.text, fontSize: 14, fontWeight: "600" },
+  mValue: { ...NUM, color: C.hit, fontSize: 15, fontWeight: "700" },
   mOf: { ...NUM, color: C.n500, fontSize: 11 },
 
   counter: { position: "absolute", right: 12, bottom: 12, paddingHorizontal: 9, paddingVertical: 4,
-    borderRadius: R.pill, backgroundColor: "rgba(10,10,10,0.62)" },
+    borderRadius: R.pill, backgroundColor: "rgba(8,8,10,0.6)", borderWidth: 1, borderColor: C.line },
   counterText: { ...NUM, color: C.n200, fontSize: 10.5, fontWeight: "500" },
 
   dots: { flexDirection: "row", justifyContent: "center", gap: 5, marginTop: 12 },
   dot: { width: 5, height: 5, borderRadius: 5, backgroundColor: C.n600 },
-  dotOn: { backgroundColor: C.text, width: 16 },
+  dotOn: { backgroundColor: C.brand, width: 18 },
 });

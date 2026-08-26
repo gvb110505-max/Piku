@@ -23,8 +23,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: C.bg, borderTopColor: C.track, height: 82, paddingTop: 10, paddingBottom: 24 },
-        tabBarActiveTintColor: C.accent200,
+        tabBarStyle: { backgroundColor: C.bg, borderTopColor: C.lineSoft, height: 82, paddingTop: 10, paddingBottom: 24 },
+        tabBarActiveTintColor: C.brand,
         tabBarInactiveTintColor: C.n600,
         
         sceneStyle: { backgroundColor: C.bg },

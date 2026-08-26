@@ -5,6 +5,7 @@ import {
   ViewStyle, TextStyle, ScrollView, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { C, R, T } from "@/lib/theme";
 
 export function Screen({ children, scroll, onRefresh, refreshing, style }: {
@@ -45,22 +46,27 @@ export function Button({ title, onPress, kind = "primary", disabled, loading, st
   title: string; onPress?: () => void; kind?: "primary" | "ghost" | "danger"; disabled?: boolean; loading?: boolean; style?: ViewStyle;
 }) {
   const off = disabled || loading;
+  const body = loading
+    ? <ActivityIndicator color={kind === "primary" ? C.onBrand : C.n300} />
+    : <Text style={[s.btnText, kind === "ghost" && { color: C.n300 }, kind === "danger" && { color: C.danger }]}>{title}</Text>;
+
+  // 주 버튼만 브랜드 그라디언트로 채운다 — 화면에서 "지금 누를 것"이 하나로 읽히게.
   return (
     <Pressable
       onPress={off ? undefined : onPress}
       style={({ pressed }) => [
         s.btn,
-        kind === "primary" && s.btnPrimary,
         kind === "ghost" && s.btnGhost,
         kind === "danger" && s.btnDanger,
-        off && { opacity: 0.4 },
-        pressed && !off && { opacity: 0.75 },
+        off && { opacity: 0.42 },
+        pressed && !off && { opacity: 0.82 },
         style,
       ]}
     >
-      {loading
-        ? <ActivityIndicator color={kind === "primary" ? C.accent200 : C.n300} />
-        : <Text style={[s.btnText, kind === "ghost" && { color: C.n300 }, kind === "danger" && { color: C.danger }]}>{title}</Text>}
+      {kind === "primary" ? (
+        <LinearGradient colors={[C.brand, C.brand2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={s.btnFill}>{body}</LinearGradient>
+      ) : body}
     </Pressable>
   );
 }
@@ -78,23 +84,33 @@ export function Field({ label, hint, ...p }: React.ComponentProps<typeof TextInp
 export function Chip({ text, on, onPress }: { text: string; on?: boolean; onPress?: () => void }) {
   return (
     <Pressable onPress={onPress} style={[s.chip, on ? s.chipOn : s.chipOff]}>
-      <Text style={[s.chipText, { color: on ? C.accent200 : C.n300 }]}>{text}</Text>
+      <Text style={[s.chipText, { color: on ? C.brand : C.n300 }]}>{text}</Text>
     </Pressable>
   );
 }
 
-export function Pill({ text, tone = "neutral" }: { text: string; tone?: "accent" | "neutral" | "danger" }) {
-  const fg = tone === "accent" ? C.accent200 : tone === "danger" ? C.danger : C.n300;
+// color를 주면 그 색으로 칠한다 — 등급 칩처럼 색 자체가 정보인 자리에 쓴다.
+export function Pill({ text, tone = "neutral", color }: {
+  text: string; tone?: "accent" | "neutral" | "danger"; color?: string;
+}) {
+  const fg = color || (tone === "accent" ? C.brand : tone === "danger" ? C.danger : C.n300);
+  const tinted = !!color || tone !== "neutral";
   return (
-    <View style={[s.pill, tone === "accent" && { borderColor: C.accent, backgroundColor: C.accentFillStrong }]}>
-      <Text style={{ ...T, color: fg, fontSize: 10, fontWeight: "500", letterSpacing: 0.4 }}>{text}</Text>
+    <View style={[s.pill, tinted && { borderColor: fg + "66", backgroundColor: fg + "1F" }]}>
+      <Text style={{ ...T, color: fg, fontSize: 10, fontWeight: "600", letterSpacing: 0.4 }}>{text}</Text>
     </View>
   );
 }
 
-export function Bar({ value }: { value: number }) {
+export function Bar({ value, colors }: { value: number; colors?: [string, string] }) {
   const w = Math.max(0, Math.min(1, value)) * 100;
-  return <View style={s.bar}><View style={[s.barFill, { width: `${w}%` }]} /></View>;
+  const [a, b] = colors || [C.brand, C.brand2];
+  return (
+    <View style={s.bar}>
+      <LinearGradient colors={[a, b]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={[s.barFill, { width: `${w}%` }]} />
+    </View>
+  );
 }
 
 export const Rule = () => <View style={s.rule} />;
@@ -102,7 +118,7 @@ export const Rule = () => <View style={s.rule} />;
 export function Loading({ text }: { text?: string }) {
   return (
     <View style={{ paddingVertical: 64, alignItems: "center", gap: 12 }}>
-      <ActivityIndicator color={C.accent} />
+      <ActivityIndicator color={C.brand} />
       {text ? <Sub>{text}</Sub> : null}
     </View>
   );
@@ -129,21 +145,23 @@ const s = StyleSheet.create({
   sub: { ...T, color: C.n500, fontSize: 11.5, lineHeight: 17 },
   body: { ...T, color: C.n400, fontSize: 12.5, lineHeight: 19 },
   label: { ...T, color: C.n600, fontSize: 10, fontWeight: "500", letterSpacing: 1.4, marginBottom: 10, textTransform: "uppercase" },
-  card: { backgroundColor: C.surface, borderRadius: R.md, padding: 16, marginTop: 14 },
+  card: { backgroundColor: C.surface, borderRadius: R.md, padding: 16, marginTop: 14, borderWidth: 1, borderColor: C.lineSoft },
   cardPanel: { backgroundColor: C.panel, borderRadius: R.lg, padding: 18, borderWidth: 1, borderColor: C.line },
-  cardAccent: { backgroundColor: C.accentFill, borderWidth: 1, borderColor: C.accent, borderRadius: R.md },
-  btn: { borderRadius: R.pill, height: 48, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
-  btnPrimary: { backgroundColor: C.accentFill, borderWidth: 1, borderColor: C.accent },
+  cardAccent: { backgroundColor: C.brandSoft, borderWidth: 1, borderColor: C.brandLine, borderRadius: R.md },
+  btn: { borderRadius: R.pill, height: 48, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 20, overflow: "hidden" },
+  btnFill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
+    alignItems: "center", justifyContent: "center" },
   btnGhost: { borderWidth: 1, borderColor: C.lineStrong },
-  btnDanger: { borderWidth: 1, borderColor: C.dangerLine },
-  btnText: { ...T, color: C.accent200, fontWeight: "600", fontSize: 14 },
+  btnDanger: { borderWidth: 1, borderColor: C.dangerLine, backgroundColor: C.dangerSoft },
+  btnText: { ...T, color: C.onBrand, fontWeight: "700", fontSize: 14 },
   input: { ...T, backgroundColor: C.surface, borderRadius: R.md, color: C.text, paddingHorizontal: 16, paddingVertical: 13, fontSize: 14 },
   chip: { height: 34, paddingHorizontal: 14, borderRadius: R.pill, borderWidth: 1, justifyContent: "center" },
-  chipOn: { borderColor: C.accent, backgroundColor: C.accentFillStrong },
+  chipOn: { borderColor: C.brandLine, backgroundColor: C.brandSoft },
   chipOff: { borderColor: C.line, backgroundColor: C.surface },
   chipText: { ...T, fontSize: 12, fontWeight: "500" },
-  pill: { borderRadius: R.sm, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: C.line, backgroundColor: "rgba(22,24,38,0.72)" },
-  bar: { height: 3, backgroundColor: C.track, borderRadius: 3, overflow: "hidden", marginTop: 8 },
-  barFill: { height: "100%", backgroundColor: C.accent },
+  pill: { borderRadius: R.sm, paddingHorizontal: 8, paddingVertical: 3.5, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  bar: { height: 4, backgroundColor: C.track, borderRadius: 4, overflow: "hidden", marginTop: 8 },
+  barFill: { height: "100%", borderRadius: 4 },
   rule: { height: 1, backgroundColor: C.lineSoft, marginVertical: 4 },
 });

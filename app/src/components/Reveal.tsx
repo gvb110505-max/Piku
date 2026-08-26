@@ -3,7 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, Animated, Easing, Pressable, StyleSheet, Platform } from "react-native";
 import * as Haptics from "expo-haptics";
-import { C, R, pt } from "@/lib/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { C, R, T, NUM, pt, gradeColor, gradeLabel } from "@/lib/theme";
 import { SlabCard } from "./SlabCard";
 import type { DrawResult } from "@/lib/api";
 
@@ -15,6 +16,7 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
   const flip = useRef(new Animated.Value(0)).current;
   const glow = useRef(new Animated.Value(0)).current;
   const hit = result.grade === "HIT";
+  const g = gradeColor(result.grade);   // 등급색이 연출 전체를 물들인다
 
   const open = () => {
     if (opened) return;
@@ -28,7 +30,7 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
   };
 
   useEffect(() => {
-    if (!opened || !hit) return;
+    if (!opened) return;
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(glow, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       Animated.timing(glow, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -40,7 +42,7 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
   const rotateY = flip.interpolate({ inputRange: [0, 1], outputRange: ["180deg", "0deg"] });
   const scale = flip.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.88, 1.05, 1] });
   const coverOpacity = flip.interpolate({ inputRange: [0, 0.35], outputRange: [1, 0], extrapolate: "clamp" });
-  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.34] });
+  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: hit ? [0.16, 0.4] : [0.05, 0.13] });
 
   return (
     <View style={st.wrap}>
@@ -50,7 +52,7 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
       </View>
 
       <Pressable onPress={open} style={st.stage}>
-        {hit && opened ? <Animated.View style={[st.glow, { opacity: glowOpacity }]} /> : null}
+        {opened ? <Animated.View style={[st.glow, { opacity: glowOpacity, backgroundColor: g }]} /> : null}
         <View style={[st.ghost, { transform: [{ rotate: "7deg" }, { translateY: 10 }], opacity: 0.35 }]} />
         <View style={[st.ghost, { transform: [{ rotate: "-4deg" }, { translateY: 4 }], opacity: 0.55 }]} />
 
@@ -60,16 +62,21 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
 
         {!opened ? (
           <Animated.View style={[st.cover, { opacity: coverOpacity }]} pointerEvents="none">
+            <LinearGradient colors={[C.brand, C.brand2]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
+              style={[st.fill, { opacity: 0.9 }]} />
             <Text style={st.coverText}>탭해서 개봉</Text>
           </Animated.View>
         ) : null}
       </Pressable>
 
       {opened ? (
-        <View style={{ alignItems: "center", gap: 6, paddingTop: 26 }}>
+        <View style={{ alignSelf: "stretch", alignItems: "center", gap: 6, paddingTop: 26 }}>
+          <View style={[st.gradeChip, { borderColor: g + "66", backgroundColor: g + "1F" }]}>
+            <Text style={[st.gradeChipText, { color: g }]}>{gradeLabel(result.grade)}</Text>
+          </View>
           <Text style={st.name}>{result.name}</Text>
           <Text style={st.sub}>
-            {packName ?? "랜덤팩"} · {result.grade === "HIT" ? "HIT" : "일반 카드"} · 교환 {pt(result.point_value)}
+            {packName ?? "랜덤팩"} · 교환 <Text style={{ color: g, fontWeight: "700" }}>{pt(result.point_value)}</Text>
           </Text>
 
           {result.bonus ? (
@@ -83,8 +90,11 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
             <Pressable onPress={onShip} style={[st.btn, st.btnGhost]}>
               <Text style={[st.btnText, { color: C.n300 }]}>실물 배송</Text>
             </Pressable>
-            <Pressable onPress={onExchange} style={[st.btn, st.btnPrimary]}>
-              <Text style={st.btnText}>{pt(result.point_value)} 교환</Text>
+            <Pressable onPress={onExchange} style={[st.btn, { overflow: "hidden" }]}>
+              <LinearGradient colors={[C.brand, C.brand2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={[st.fill, { alignItems: "center", justifyContent: "center" }]}>
+                <Text style={st.btnText}>{pt(result.point_value)} 교환</Text>
+              </LinearGradient>
             </Pressable>
           </View>
           <Pressable onPress={onDone} style={{ paddingVertical: 14 }}>
@@ -99,24 +109,26 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
 const st = StyleSheet.create({
   wrap: { alignItems: "center", paddingTop: 4 },
   head: { width: "100%", flexDirection: "row", justifyContent: "space-between", paddingBottom: 10 },
-  meta: { color: C.n500, fontSize: 11.5 },
+  meta: { ...NUM, color: C.n500, fontSize: 11.5 },
+  fill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   stage: { alignItems: "center", justifyContent: "center", width: 280, height: 380 },
-  glow: { position: "absolute", width: 320, height: 400, borderRadius: 200, backgroundColor: C.accent },
+  glow: { position: "absolute", width: 320, height: 400, borderRadius: 200 },
   ghost: { position: "absolute", width: 236, height: 300, borderRadius: R.lg, backgroundColor: C.surface,
     borderWidth: 1, borderColor: C.track },
   cover: { position: "absolute", left: 20, right: 20, top: 30, bottom: 30, alignItems: "center", justifyContent: "center",
-    backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.line },
-  coverText: { color: C.accent200, fontWeight: "500", fontSize: 15, letterSpacing: 1.5 },
-  name: { color: C.text, fontWeight: "500", fontSize: 26, letterSpacing: -0.4, textAlign: "center" },
-  sub: { color: C.n500, fontSize: 12.5, textAlign: "center" },
-  bonus: { marginTop: 14, backgroundColor: C.accentFillStrong, borderWidth: 1, borderColor: C.accent,
+    borderRadius: R.lg, overflow: "hidden" },
+  coverText: { ...T, color: "#FFFFFF", fontWeight: "700", fontSize: 15, letterSpacing: 1.5 },
+  gradeChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill, borderWidth: 1, marginBottom: 4 },
+  gradeChipText: { ...T, fontSize: 10.5, fontWeight: "700", letterSpacing: 1 },
+  name: { ...T, color: C.text, fontWeight: "700", fontSize: 24, letterSpacing: -0.5, textAlign: "center" },
+  sub: { ...T, color: C.n500, fontSize: 12.5, textAlign: "center" },
+  bonus: { marginTop: 14, backgroundColor: C.hitSoft, borderWidth: 1, borderColor: C.hit + "66",
     borderRadius: R.md, paddingHorizontal: 16, paddingVertical: 12, alignItems: "center", gap: 3 },
-  bonusTitle: { color: C.accent200, fontWeight: "500", fontSize: 10, letterSpacing: 1.4 },
-  bonusName: { color: C.text, fontWeight: "500", fontSize: 13 },
+  bonusTitle: { ...T, color: C.hit, fontWeight: "700", fontSize: 10, letterSpacing: 1.4 },
+  bonusName: { ...T, color: C.text, fontWeight: "600", fontSize: 13 },
   actions: { flexDirection: "row", gap: 10, marginTop: 24, width: "100%" },
-  btn: { flex: 1, height: 52, borderRadius: R.pill, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  btnPrimary: { backgroundColor: C.accentFill, borderColor: C.accent },
-  btnGhost: { borderColor: C.lineStrong },
-  btnText: { color: C.accent200, fontWeight: "500", fontSize: 14.5 },
-  later: { color: C.n600, fontSize: 12.5 },
+  btn: { flex: 1, height: 50, borderRadius: R.pill, alignItems: "center", justifyContent: "center" },
+  btnGhost: { borderWidth: 1, borderColor: C.lineStrong },
+  btnText: { ...T, color: C.onBrand, fontWeight: "700", fontSize: 14 },
+  later: { ...T, color: C.n600, fontSize: 12.5 },
 });

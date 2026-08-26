@@ -20,6 +20,7 @@ export function HitFeed({ hits, limit = 4 }: { hits: RecentHit[]; limit?: number
     <View>
       {hits.slice(0, limit).map((h) => (
         <View key={h.id} style={st.row}>
+          <View style={st.dot} />
           <Text style={st.who}>{h.nickname}</Text>
           <Text style={st.name} numberOfLines={1}>{h.name}</Text>
           <Text style={st.value}>{pt(h.point_value)}</Text>
@@ -33,8 +34,9 @@ export function HitFeed({ hits, limit = 4 }: { hits: RecentHit[]; limit?: number
 const st = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10,
     paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.lineSoft },
+  dot: { width: 5, height: 5, borderRadius: 5, backgroundColor: C.hit },
   who: { ...T, color: C.n500, fontSize: 11, width: 42 },
   name: { ...T, color: C.n200, fontSize: 12.5, flex: 1 },
-  value: { ...NUM, color: C.gold, fontSize: 12, fontWeight: "600" },
+  value: { ...NUM, color: C.hit, fontSize: 12, fontWeight: "700" },
   time: { ...NUM, color: C.n600, fontSize: 10, width: 42, textAlign: "right" },
 });

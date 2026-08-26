@@ -92,16 +92,16 @@ export default function Home() {
   }
 
   const quicks: Quick[] = [
-    { key: "market", label: "마켓", icon: <IconBag size={21} color={C.n200} />,
+    { key: "market", label: "마켓", color: C.uncommon, icon: <IconBag size={21} color={C.uncommon} />,
       onPress: () => router.push("/(tabs)/market") },
-    { key: "collection", label: "컬렉션", icon: <IconBinder size={21} color={C.n200} />,
+    { key: "collection", label: "컬렉션", color: C.rare, icon: <IconBinder size={21} color={C.rare} />,
       onPress: () => router.push("/(tabs)/collection") },
-    { key: "welcome", label: "웰컴팩", icon: <IconGift size={21} color={C.n200} />,
+    { key: "welcome", label: "웰컴팩", color: C.hit, icon: <IconGift size={21} color={C.hit} />,
       badge: canWelcome ? "1" : null,
       onPress: () => (canWelcome ? openWelcome() : router.push("/(tabs)/collection")) },
-    { key: "point", label: "포인트", icon: <IconChart size={21} color={C.n200} />,
+    { key: "point", label: "포인트", color: C.up, icon: <IconChart size={21} color={C.up} />,
       onPress: () => router.push("/(tabs)/me") },
-    { key: "sell", label: "판매하기", icon: <IconPlus size={21} color={C.n200} />,
+    { key: "sell", label: "판매하기", color: C.brand, icon: <IconPlus size={21} color={C.brand} />,
       onPress: () => router.push("/market/sell") },
   ];
 
@@ -124,7 +124,7 @@ export default function Home() {
             <Text style={st.points}>{pt(me?.user.points ?? 0)}</Text>
           </View>
           <Pressable onPress={() => router.push("/(tabs)/market")} hitSlop={10} style={st.iconBtn}>
-            <IconSearch size={20} color={C.n300} />
+            <IconSearch size={19} color={C.n200} />
           </Pressable>
         </View>
 
@@ -200,16 +200,16 @@ const st = StyleSheet.create({
 
   topBar: { flexDirection: "row", alignItems: "center", gap: 12 },
   hello: { ...T, color: C.text, fontSize: 16, fontWeight: "600", letterSpacing: -0.4 },
-  points: { ...NUM, color: C.n500, fontSize: 11.5, marginTop: 3 },
+  points: { ...NUM, color: C.hit, fontSize: 11.5, fontWeight: "600", marginTop: 3 },
   iconBtn: { width: 36, height: 36, borderRadius: R.pill, alignItems: "center", justifyContent: "center",
     backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
 
   tabs: { flexDirection: "row", gap: 20, marginTop: 18, borderBottomWidth: 1, borderBottomColor: C.lineSoft },
   tab: { alignItems: "center" },
   tabText: { ...T, color: C.n500, fontSize: 13, fontWeight: "500", paddingBottom: 9 },
-  tabTextOn: { color: C.text, fontWeight: "600" },
+  tabTextOn: { color: C.brand, fontWeight: "700" },
   tabBar: { height: 2, alignSelf: "stretch", backgroundColor: "transparent", marginBottom: -1 },
-  tabBarOn: { backgroundColor: C.text },
+  tabBarOn: { backgroundColor: C.brand },
 
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 28, marginBottom: 4 },
   headTitle: { ...T, color: C.text, fontSize: 14, fontWeight: "600", letterSpacing: -0.2 },
