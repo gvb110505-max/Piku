@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const db = require("./db");
 const { getOdds, draw } = require("./gacha");
+const pay = require("./pay");
 
 const app = express();
 
@@ -42,7 +43,9 @@ app.use((req, res, next) => {
   db.init().then(() => next()).catch(next);
 });
 
-const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY || ""; // 비어있으면 테스트 모드
+// 링크 결제(블로그페이 방식) — PG SDK를 앱에 넣지 않는다. PAY_MODE=live 이거나
+// 결제 링크/계좌가 설정돼 있으면 운영 모드로 보고, 개발용 자동승인 경로를 닫는다.
+const PAY_DEV_MODE = process.env.PAY_MODE !== "live";
 // 환경변수에 붙어 들어오는 앞뒤 공백/개행(붙여넣기 사고)을 제거 — 이것 때문에 403이 나는 경우가 많다
 const ADMIN_TOKEN = String(process.env.ADMIN_TOKEN || "dev-admin").trim();
 const BUILD = "2026-08-26.1"; // 관리자 페이지 캐시 확인용 빌드 스탬프
@@ -81,10 +84,10 @@ function isMinor(birth) {
 // 오늘 결제액 — 랜덤팩(orders)과 마켓 구매(market_orders)를 합산한다.
 // 합산하지 않으면 마켓이 미성년자 한도 우회 경로가 된다.
 const PASS_CONFIGURED = !!(process.env.PASS_CLIENT_ID && process.env.PASS_CLIENT_SECRET);
-// 개발용 자가 본인확인은 PG도 PASS도 붙지 않은 로컬 환경에서만 열린다.
-// 운영에서는 TOSS_SECRET_KEY가 설정되므로 자동으로 닫힌다.
+// 개발용 자가 본인확인은 결제도 PASS도 붙지 않은 로컬 환경에서만 열린다.
+// 운영(PAY_MODE=live 또는 PASS 설정)에서는 자동으로 닫힌다.
 const ALLOW_DEV_IDENTITY = process.env.ALLOW_DEV_IDENTITY === "1"
-  || (process.env.ALLOW_DEV_IDENTITY !== "0" && !TOSS_SECRET_KEY && !PASS_CONFIGURED);
+  || (process.env.ALLOW_DEV_IDENTITY !== "0" && PAY_DEV_MODE && !PASS_CONFIGURED);
 
 async function identityRequired() {
   const r = await db.get("SELECT value FROM settings WHERE key='identity_required'");
@@ -127,53 +130,21 @@ async function assertPaymentAllowed(userId, amount) {
       : "본인확인을 완료해야 결제 한도가 해제됩니다." };
 }
 
-// 토스 결제 승인. 시크릿 키가 없으면 개발 모드로 통과시킨다.
-async function confirmPayment({ paymentKey, orderId, amount }) {
-  if (!TOSS_SECRET_KEY) return { ok: true, key: paymentKey || "DEV" };
-  const r = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
-    method: "POST",
-    headers: { Authorization: "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64"),
-      "Content-Type": "application/json" },
-    body: JSON.stringify({ paymentKey, orderId, amount }),
-  });
-  if (!r.ok) return { ok: false, detail: await r.text() };
-  return { ok: true, key: paymentKey };
-}
-
-// 토스 결제 취소(환불). 시도는 항상 refunds 원장에 남기고, PG 취소가 성공한 경우에만 done이 된다.
-// 호출부는 반환값의 ok를 보고 주문 상태를 바꿔야 한다 — 실패했는데 환불 처리하면 돈이 안 나간 채 장부만 맞는다.
+// 환불. 링크 결제는 돈이 앱 밖에서 오간 것이라 API로 되돌릴 수 없다 —
+// 원장에 'requested'로 남기고, 관리자가 제공자 화면에서 실제 환불한 뒤 done으로 닫는다.
+// 주문 상태(거래가 무효가 됐는가)와 원장 상태(돈이 실제로 나갔는가)는 별개로 본다.
 async function cancelPayment({ kind, orderId, orderRef, pgKey, amount, reason }) {
   const rid = await db.insert(
-    `INSERT INTO refunds (kind, order_id, order_ref, pg_key, amount, reason, created_at)
-     VALUES (?,?,?,?,?,?,?)`,
-    [kind, orderId || null, orderRef || null, pgKey || null, amount, reason || null, db.NOW()]);
-
-  // 개발 모드(시크릿 키 없음) 또는 개발용 결제키는 PG 호출 없이 성공 처리
-  if (!TOSS_SECRET_KEY || !pgKey || pgKey === "DEV") {
-    await db.run("UPDATE refunds SET status='done', pg_response=?, done_at=? WHERE id=?",
-      ["DEV_MODE", db.NOW(), rid]);
+    `INSERT INTO refunds (kind, order_id, order_ref, pg_key, amount, reason, status, created_at)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [kind, orderId || null, orderRef || null, pgKey || null, amount, reason || null,
+     PAY_DEV_MODE ? "done" : "requested", db.NOW()]);
+  if (PAY_DEV_MODE) {
+    await db.run("UPDATE refunds SET pg_response=?, done_at=? WHERE id=?", ["DEV_MODE", db.NOW(), rid]);
     return { ok: true, refund_id: rid, dev: true };
   }
-  try {
-    const r = await fetch(`https://api.tosspayments.com/v1/payments/${encodeURIComponent(pgKey)}/cancel`, {
-      method: "POST",
-      headers: { Authorization: "Basic " + Buffer.from(TOSS_SECRET_KEY + ":").toString("base64"),
-        "Content-Type": "application/json",
-        "Idempotency-Key": `refund-${kind}-${orderId || orderRef || rid}` },
-      body: JSON.stringify({ cancelReason: reason || "판매자 사유", cancelAmount: amount }),
-    });
-    const body = await r.text();
-    if (!r.ok) {
-      await db.run("UPDATE refunds SET status='failed', pg_response=? WHERE id=?", [body.slice(0, 1000), rid]);
-      return { ok: false, refund_id: rid, detail: body };
-    }
-    await db.run("UPDATE refunds SET status='done', pg_response=?, done_at=? WHERE id=?",
-      [body.slice(0, 1000), db.NOW(), rid]);
-    return { ok: true, refund_id: rid };
-  } catch (e) {
-    await db.run("UPDATE refunds SET status='failed', pg_response=? WHERE id=?", [String(e.message || e), rid]);
-    return { ok: false, refund_id: rid, detail: String(e.message || e) };
-  }
+  return { ok: true, refund_id: rid, manual: true,
+    message: "환불 요청이 접수되었습니다. 영업일 기준 1~3일 내에 결제하신 수단으로 돌려드립니다." };
 }
 
 app.get(["/", "/health"], (req, res) => {
@@ -193,7 +164,7 @@ app.post("/auth/request-code", h(async (req, res) => {
     "INSERT INTO phone_codes (phone, code, expires_at) VALUES (?,?,?) ON CONFLICT(phone) DO UPDATE SET code=excluded.code, expires_at=excluded.expires_at",
     [phone, code, Date.now() + 3 * 60 * 1000]);
   console.log(`[SMS 테스트모드] ${phone} 인증번호: ${code}`);
-  res.json({ ok: true, dev_code: TOSS_SECRET_KEY ? undefined : code });
+  res.json({ ok: true, dev_code: PAY_DEV_MODE ? code : undefined });
 }));
 
 app.post("/auth/verify", h(async (req, res) => {
@@ -242,7 +213,7 @@ app.post("/identity/pass/callback", h(async (req, res) => {
   res.status(501).json({ error: "NOT_IMPLEMENTED" });
 }));
 
-// 개발 전용 — 운영(TOSS 키 또는 PASS 설정)에서는 자동으로 닫힌다
+// 개발 전용 — 운영(PAY_MODE=live 또는 PASS 설정)에서는 자동으로 닫힌다
 app.post("/identity/dev-verify", auth, h(async (req, res) => {
   if (!ALLOW_DEV_IDENTITY) return res.status(403).json({ error: "DEV_IDENTITY_DISABLED" });
   const { birth, name } = req.body;
@@ -302,39 +273,110 @@ app.get("/packs/:id", h(async (req, res) => {
 }));
 
 // ---------- 결제 → 개봉 ----------
-app.post("/purchase", auth, h(async (req, res) => {
-  const { pack_id, method, paymentKey, orderId, amount } = req.body;
-  const pack = await db.get("SELECT * FROM packs WHERE id=?", [pack_id]);
-  if (!pack || pack.is_welcome) return res.status(400).json({ error: "BAD_PACK" });
-  if (amount !== pack.price) return res.status(400).json({ error: "AMOUNT_MISMATCH" });
+// 링크 결제라 두 단계로 나뉜다.
+//   POST /checkout  → 주문번호 + 결제 링크 발급 (아직 아무것도 뽑지 않는다)
+//   입금 확인       → pay.settle()이 아래 확정 처리기를 돌려 그때 개봉한다
+// 결제 대기 동안에는 슬롯을 예약해 둔다. 예약을 안 걸면 "결제는 됐는데 품절"이
+// 생기고, 링크 결제는 자동 환불이 안 되므로 그건 사람이 수습해야 하는 사고가 된다.
 
-  // 미성년자 일 결제 한도 — PG 승인 "전"에 차단 (마켓 결제 합산)
-  const blocked = await assertPaymentAllowed(req.userId, amount);
+pay.register("pack", async (c, link) => {
+  const oid = await c.insert(
+    "INSERT INTO orders (user_id, pack_id, amount, method, pg_key, created_at) VALUES (?,?,?,?,?,?)",
+    [link.user_id, link.ref_id, link.amount, link.provider, link.pg_key || link.uid, db.NOW()]);
+  const result = await draw(c, link.user_id, link.ref_id);
+  return { order_id: oid, result };
+});
+
+app.post("/checkout", auth, h(async (req, res) => {
+  const { pack_id, amount } = req.body;
+  const pack = await db.get("SELECT * FROM packs WHERE id=?", [Number(pack_id)]);
+  if (!pack || pack.is_welcome) return res.status(400).json({ error: "BAD_PACK" });
+  if (!pack.active) return res.status(409).json({ error: "SOLD_OUT" });
+  if (amount != null && Number(amount) !== pack.price)
+    return res.status(400).json({ error: "AMOUNT_MISMATCH", expected: pack.price });
+
+  // 미성년자 일 결제 한도 — 링크를 내주기 "전"에 막는다 (마켓 결제 합산)
+  const blocked = await assertPaymentAllowed(req.userId, pack.price);
   if (blocked) return res.status(403).json(blocked);
 
-  const pay = await confirmPayment({ paymentKey, orderId, amount });
-  if (!pay.ok) return res.status(402).json({ error: "PAYMENT_FAILED", detail: pay.detail });
+  // 남은 슬롯에서 결제 대기 예약분을 뺀 것이 지금 팔 수 있는 몫이다.
+  const reserved = await pay.reservedSlots(pack.id);
+  if (pack.total_slots - pack.sold_slots - reserved <= 0)
+    return res.status(409).json({ error: "SOLD_OUT",
+      message: "지금은 결제 대기 중인 주문이 남은 수량을 모두 잡고 있어요. 잠시 후 다시 시도해 주세요." });
 
   try {
-    const out = await db.tx(async (c) => {
-      const oid = await c.insert("INSERT INTO orders (user_id, pack_id, amount, method, pg_key, created_at) VALUES (?,?,?,?,?,?)",
-        [req.userId, pack_id, amount, method || "toss", paymentKey || "DEV", db.NOW()]);
-      const result = await draw(c, req.userId, pack_id);
-      return { order_id: oid, result };
-    });
+    const out = await pay.createCheckout({
+      kind: "pack", userId: req.userId, refId: pack.id, amount: pack.price,
+      title: pack.name, payUrlOverride: pack.pay_url || null });
     res.json(out);
   } catch (e) {
-    // 결제 승인 후 추첨이 실패한 경우 — 돈만 빠지고 상품이 없는 상태이므로 즉시 자동 환불
-    const rf = await cancelPayment({ kind: "pack", orderRef: orderId || null, pgKey: pay.key,
-      amount, reason: "추첨 실패 자동 환불: " + e.message });
-    res.status(409).json({ error: e.message,
-      refunded: rf.ok, refund_id: rf.refund_id,
-      message: rf.ok ? "결제가 자동으로 취소되었습니다."
-        : "결제 취소에 실패했습니다. 고객센터에서 확인 후 환불해드립니다." });
+    res.status(e.status || 400).json({ error: e.message, message: e.message_ko });
   }
 }));
 
-// 웰컴팩: 1,000포인트 + 계정당 1회 (서버 검증)
+// 결제 상태 조회 — 앱은 링크를 열어준 뒤 이 엔드포인트를 폴링한다.
+app.get("/checkout/:uid", auth, h(async (req, res) => {
+  const link = await pay.find(req.params.uid);
+  if (!link || Number(link.user_id) !== Number(req.userId))
+    return res.status(404).json({ error: "PAYMENT_NOT_FOUND" });
+  res.json(pay.publicView(link, await pay.getPaySettings()));
+}));
+
+app.post("/checkout/:uid/cancel", auth, h(async (req, res) => {
+  const r = await pay.cancel(req.params.uid, req.userId);
+  if (!r.ok) return res.status(r.status || 400).json({ error: r.error });
+  res.json({ ok: true });
+}));
+
+// 개발/테스트 전용 자동 승인. 운영(PAY_MODE=live)에서는 닫힌다.
+app.post("/checkout/:uid/confirm-dev", auth, h(async (req, res) => {
+  if (!PAY_DEV_MODE) return res.status(403).json({ error: "DEV_CONFIRM_DISABLED" });
+  const r = await settleAndRespond(req.params.uid, { by: "dev" }, res, req.userId);
+  return r;
+}));
+
+// 공통 확정 경로 — 웹훅·관리자·개발 승인이 모두 여기로 모인다.
+async function settleAndRespond(uid, opts, res, ownerId) {
+  const link = await pay.find(uid);
+  if (!link || (ownerId != null && Number(link.user_id) !== Number(ownerId)))
+    return res.status(404).json({ error: "PAYMENT_NOT_FOUND" });
+  const out = await pay.settle(uid, {
+    ...opts,
+    // 확정 직전 한도 재검사 — 링크를 받아두고 다른 결제를 먼저 끝낸 경우를 막는다
+    guard: (l) => assertPaymentAllowed(l.user_id, l.amount),
+  });
+  if (!out.ok) return res.status(out.status || 409).json({ error: out.error, detail: out.detail,
+    refund_requested: out.refund_requested,
+    message: out.refund_requested ? "결제는 확인됐지만 상품 확정에 실패했어요. 환불 요청을 접수했습니다." : undefined });
+  const after = await pay.find(uid);
+  res.json({ ok: true, already: !!out.already, ...pay.publicView(after, await pay.getPaySettings()) });
+}
+
+// 결제 제공자 웹훅. 공유 비밀이 설정돼 있을 때만 열린다 — 아무나 주문을 확정시키면 안 된다.
+app.post("/pay/webhook/:provider", h(async (req, res) => {
+  const st = await pay.getPaySettings();
+  if (!st.webhook_secret) return res.status(404).json({ error: "WEBHOOK_DISABLED" });
+  const given = String(req.headers["x-pay-secret"] || req.query.secret || "");
+  // 길이가 달라도 타이밍이 새지 않도록 해시를 비교한다
+  const eq = crypto.timingSafeEqual(
+    crypto.createHash("sha256").update(given).digest(),
+    crypto.createHash("sha256").update(st.webhook_secret).digest());
+  if (!eq) return res.status(403).json({ error: "BAD_SECRET" });
+
+  const uid = String(req.body.uid || req.body.order_id || req.body.memo || "").trim();
+  const status = String(req.body.status || "paid").toLowerCase();
+  if (!uid) return res.status(400).json({ error: "UID_REQUIRED" });
+  if (status !== "paid" && status !== "done" && status !== "success") {
+    await pay.cancel(uid, null);
+    return res.json({ ok: true, cancelled: true });
+  }
+  return settleAndRespond(uid, {
+    pgKey: req.body.pg_key || req.body.tid || null,
+    payerName: req.body.payer_name || req.body.buyer_name || null,
+    by: "webhook:" + req.params.provider }, res, null);
+}));
+
 app.post("/purchase/welcome", auth, h(async (req, res) => {
   try {
     const result = await db.tx(async (c) => {
@@ -411,7 +453,7 @@ app.get("/me", auth, h(async (req, res) => {
 }));
 
 // ---------- 마켓 (통신판매중개) ----------
-require("./market").mount(app, { auth, admin, h, confirmPayment, cancelPayment, assertPaymentAllowed });
+require("./market").mount(app, { auth, admin, h, cancelPayment, assertPaymentAllowed });
 
 // ---------- 관리자 ----------
 let adminHtml = null;
@@ -475,7 +517,7 @@ app.post("/admin/packs", admin, h(async (req, res) => {
   res.json({ id });
 }));
 app.post("/admin/packs/:id", admin, h(async (req, res) => {
-  const allowed = ["name", "price", "point_price", "total_slots", "active", "image", "list_price"];
+  const allowed = ["name", "price", "point_price", "total_slots", "active", "image", "list_price", "pay_url"];
   const sets = [], vals = [];
   for (const k of allowed) if (req.body[k] != null) { sets.push(`${k}=?`); vals.push(req.body[k]); }
   if (!sets.length) return res.status(400).json({ error: "NO_FIELDS" });
@@ -619,7 +661,51 @@ app.get("/admin/images", admin, h(async (req, res) => {
 }));
 
 app.get("/admin/refunds", admin, h(async (req, res) => {
-  res.json(await db.all("SELECT * FROM refunds ORDER BY (CASE WHEN status='failed' THEN 0 ELSE 1 END), id DESC LIMIT 200"));
+  res.json(await db.all(
+    `SELECT * FROM refunds
+     ORDER BY (CASE WHEN status IN ('failed','requested','pending') THEN 0 ELSE 1 END), id DESC LIMIT 200`));
+}));
+
+// 링크 결제는 API로 환불이 안 된다. 관리자가 제공자 화면에서 실제로 돈을 돌려준 뒤
+// 여기서 원장을 닫는다 — 이 단계를 거쳐야 "돈이 나갔다"고 말할 수 있다.
+app.post("/admin/refunds/:id/:action", admin, h(async (req, res) => {
+  const map = { done: "done", failed: "failed", retry: "requested" };
+  const to = map[req.params.action];
+  if (!to) return res.status(400).json({ error: "BAD_ACTION" });
+  const r = await db.run("UPDATE refunds SET status=?, pg_response=?, done_at=? WHERE id=?",
+    [to, req.body.memo || null, to === "done" ? db.NOW() : null, Number(req.params.id)]);
+  if (!r.changes) return res.status(404).json({ error: "NOT_FOUND" });
+  res.json({ ok: true, status: to });
+}));
+
+// ---------- 결제 대사 ----------
+// 입금 확인은 기본적으로 사람이 한다. 목록에서 주문번호와 입금자명을 맞춰보고 승인하면
+// 그 시점에 개봉/주문이 확정된다.
+app.get("/admin/payments", admin, h(async (req, res) => {
+  await pay.sweepExpired();
+  const st = String(req.query.status || "open");
+  const where = st === "all" ? "" :
+    st === "open" ? "WHERE p.status IN ('pending','failed')" : "WHERE p.status=?";
+  const args = st === "all" || st === "open" ? [] : [st];
+  res.json({
+    settings: await pay.getPaySettings(),
+    payments: await db.all(
+      `SELECT p.*, u.nickname, u.phone FROM payment_links p LEFT JOIN users u ON u.id=p.user_id
+       ${where} ORDER BY (CASE WHEN p.status='pending' THEN 0 ELSE 1 END), p.id DESC LIMIT 200`, args),
+  });
+}));
+
+app.post("/admin/payments/:uid/confirm", admin, h(async (req, res) =>
+  settleAndRespond(req.params.uid, {
+    pgKey: req.body.pg_key || null, payerName: req.body.payer_name || null,
+    by: "admin" }, res, null)));
+
+app.post("/admin/payments/:uid/reject", admin, h(async (req, res) => {
+  const r = await pay.cancel(req.params.uid, null);
+  if (!r.ok) return res.status(r.status || 400).json({ error: r.error });
+  await db.run("UPDATE payment_links SET fail_reason=? WHERE uid=?",
+    [req.body.reason || "관리자 취소", req.params.uid]);
+  res.json({ ok: true });
 }));
 
 app.use((err, req, res, next) => {
@@ -630,5 +716,5 @@ app.use((err, req, res, next) => {
 module.exports = app;
 if (require.main === module) {
   const PORT = process.env.PORT || 4000;
-  app.listen(PORT, () => console.log(`API on :${PORT} (${db.usePg ? "Postgres" : "SQLite"}${TOSS_SECRET_KEY ? ", PG결제 연동" : ", 결제 테스트 모드"})`));
+  app.listen(PORT, () => console.log(`API on :${PORT} (${db.usePg ? "Postgres" : "SQLite"}${PAY_DEV_MODE ? ", 결제 테스트 모드" : ", 링크 결제"})`));
 }

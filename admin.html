@@ -61,6 +61,7 @@
     <div class="tab" data-t="packs" onclick="go('packs')">팩·상품</div>
     <div class="tab" data-t="ship" onclick="go('ship')">배송</div>
     <div class="tab" data-t="orders" onclick="go('orders')">주문·유저</div>
+    <div class="tab" data-t="pay" onclick="go('pay')">결제 대사</div>
     <div class="tab" data-t="market" onclick="go('market')">마켓 검수</div>
     <div class="tab" data-t="settle" onclick="go('settle')">정산·정책</div>
   </div>
@@ -173,7 +174,7 @@ function boot(){
 function go(t){
   var tabs=document.querySelectorAll('.tab');
   for(var i=0;i<tabs.length;i++) tabs[i].classList.toggle('on',tabs[i].dataset.t===t);
-  ({dash:renderDash,packs:renderPacks,ship:renderShip,orders:renderOrders,market:renderMarket,settle:renderSettle})[t]();
+  ({dash:renderDash,packs:renderPacks,ship:renderShip,orders:renderOrders,pay:renderPay,market:renderMarket,settle:renderSettle})[t]();
 }
 
 function renderDash(){
@@ -217,6 +218,9 @@ function renderPacks(){
         +'<input class="sm" type="number" value="'+p.total_slots+'" id="slots_'+p.id+'">'
         +'<button class="ghost" onclick="updPack('+p.id+',{total_slots:+document.getElementById(\'slots_'+p.id+'\').value})">저장</button>'
         +'<button class="ghost" onclick="updPack('+p.id+',{active:'+(p.active?0:1)+'})">'+(p.active?'판매 중단':'판매 재개')+'</button></div>'
+        +'<div class="row"><label class="muted">결제 링크</label>'
+        +'<input style="min-width:320px" id="payurl_'+p.id+'" placeholder="비우면 결제 대사 탭의 공통 설정을 씁니다" value="'+esc(p.pay_url||'')+'">'
+        +'<button class="ghost" onclick="updPack('+p.id+',{pay_url:document.getElementById(\'payurl_'+p.id+'\').value})">저장</button></div>'
         +'<table><tr><th>이미지</th><th>HIT</th><th>잔여</th><th>총량</th><th>교환P</th><th></th></tr>';
       p.hits.forEach(function(x){
         h+='<tr><td>'+imgCell('hit',x.id,x.image)+'</td><td>'+esc(x.name)+'</td>'
@@ -587,18 +591,22 @@ function renderSettle(){
     h+='</div>';
 
     // 실패한 환불은 돈이 안 나간 상태라 가장 먼저 눈에 띄어야 한다
-    var rfFail=rfs.filter(function(x){return x.status==='failed';});
+    var rfOpen=rfs.filter(function(x){return x.status!=='done';});
     h+='<div class="card"><h3>환불 원장 '
-      +(rfFail.length?'<span class="pill off">실패 '+rfFail.length+'건</span>':'<span class="pill on">정상</span>')+'</h3>';
-    if(rfFail.length) h+='<p class="muted" style="margin-top:6px;color:#FF7A7A">'
-      +'PG 취소가 실패한 건입니다. 실제 환불이 나가지 않았으니 마켓 검수 탭에서 재시도하세요.</p>';
-    h+='<table><tr><th>#</th><th>구분</th><th>주문</th><th>금액</th><th>상태</th><th>사유</th></tr>';
+      +(rfOpen.length?'<span class="pill off">미처리 '+rfOpen.length+'건</span>':'<span class="pill on">정상</span>')+'</h3>';
+    h+='<p class="muted" style="margin-top:6px">링크 결제는 API로 환불이 되지 않습니다. '
+      +'결제 제공자 화면에서 실제로 돈을 돌려준 뒤 여기서 완료로 닫으세요. '
+      +'<b>완료로 닫기 전까지는 돈이 나가지 않은 상태</b>입니다.</p>';
+    h+='<table><tr><th>#</th><th>구분</th><th>주문</th><th>금액</th><th>상태</th><th>사유</th><th></th></tr>';
     rfs.forEach(function(x){
       h+='<tr><td>'+x.id+'</td><td>'+(x.kind==='pack'?'랜덤팩':'마켓')+'</td>'
         +'<td class="muted">'+esc(x.order_ref||('#'+(x.order_id||'-')))+'</td>'
         +'<td>'+num(x.amount)+'원</td>'
-        +'<td>'+({pending:'진행중',done:'환불 완료',failed:'실패'}[x.status]||x.status)+'</td>'
-        +'<td class="muted">'+esc(x.reason||'')+'</td></tr>';
+        +'<td>'+({pending:'진행중',requested:'환불 필요',done:'환불 완료',failed:'실패'}[x.status]||x.status)+'</td>'
+        +'<td class="muted">'+esc(x.reason||'')+'</td><td>'
+        +(x.status==='done'?'<span class="muted">'+esc(x.done_at||'')+'</span>'
+          :'<button onclick="refundDone('+x.id+')">환불 완료</button>')
+        +'</td></tr>';
     });
     h+='</table></div>';
 
@@ -611,6 +619,12 @@ function renderSettle(){
     h+='</table></div>';
     $('#view').innerHTML=h;
   }).catch(function(e){ toast(e.message); });
+}
+function refundDone(id){
+  var memo=prompt('실제로 환불을 보내셨나요? 처리 메모를 남겨주세요 (예: 블로그페이에서 취소 처리)','');
+  if(memo===null) return;
+  api('/admin/refunds/'+id+'/done',{memo:memo})
+    .then(function(){toast('환불 원장 종료');renderSettle();}).catch(function(e){toast(e.message);});
 }
 function saveSettings(){
   api('/admin/settings',{

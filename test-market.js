@@ -26,6 +26,22 @@ async function signup(phone, nick, birth) {
   return { token: v.token, id: v.user.id, H };
 }
 
+// 링크 결제 2단계 — 링크 발급 후 입금 확인(개발 자동승인)까지 한 번에 돌린다.
+// 실패 응답(한도 초과·매물 없음 등)은 1단계에서 그대로 돌아온다.
+async function buyListing(body, H) {
+  const co = await post("/market/orders", body, H);
+  if (co.error || !co.uid) return co;
+  const done = await post(`/checkout/${co.uid}/confirm-dev`, {}, H);
+  if (done.error) return { ...co, ...done };
+  return { ...co, ...(done.result || {}) };
+}
+async function buyPack(packId, amount, H) {
+  const co = await post("/checkout", { pack_id: packId, amount }, H);
+  if (co.error || !co.uid) return co;
+  const done = await post(`/checkout/${co.uid}/confirm-dev`, {}, H);
+  return done.error ? { ...co, ...done } : { ...co, ...(done.result || {}) };
+}
+
 (async () => {
   await new Promise((r) => setTimeout(r, 600));
 
@@ -49,16 +65,16 @@ async function signup(phone, nick, birth) {
   check("2. 검색", found.items.length === 1 && found.items[0].id === L.id, found.items.length);
 
   // --- 3. 구매 (에스크로) ---
-  const self = await post("/market/orders", { listing_id: L.id, address: "서울 1", amount: 503500 }, seller.H);
+  const self = await buyListing({ listing_id: L.id, address: "서울 1", amount: 503500 }, seller.H);
   check("3-a. 자기 상품 구매 차단", self.error === "SELF_PURCHASE", self);
 
-  const wrongAmt = await post("/market/orders", { listing_id: L.id, address: "서울 1", amount: 500000 }, buyer.H);
+  const wrongAmt = await buyListing({ listing_id: L.id, address: "서울 1", amount: 500000 }, buyer.H);
   check("3-b. 금액 조작 차단", wrongAmt.error === "AMOUNT_MISMATCH", wrongAmt);
 
-  const O = await post("/market/orders", { listing_id: L.id, address: "서울시 강남구 1", amount: 503500 }, buyer.H);
+  const O = await buyListing({ listing_id: L.id, address: "서울시 강남구 1", amount: 503500 }, buyer.H);
   check("3-c. 구매 성공 + 에스크로 보관", O.order_id > 0 && O.status === "paid" && O.payout_amount === 460000, O);
 
-  const dup = await post("/market/orders", { listing_id: L.id, address: "서울 2", amount: 503500 }, buyer.H);
+  const dup = await buyListing({ listing_id: L.id, address: "서울 2", amount: 503500 }, buyer.H);
   check("3-d. 판매완료 상품 중복 구매 차단", dup.error === "LISTING_UNAVAILABLE", dup);
 
   // --- 4. 수거 신청 → 접수번호 발급 ---
@@ -104,7 +120,7 @@ async function signup(phone, nick, birth) {
 
   // --- 9. 검수 불합격 → 환불 + 재판매 원복 ---
   const L2 = await post("/market/listings", { title: "가짜 뮤츠", ask_price: 100000 }, seller.H);
-  const O2 = await post("/market/orders", { listing_id: L2.id, address: "서울 3", amount: 103500 }, buyer.H);
+  const O2 = await buyListing({ listing_id: L2.id, address: "서울 3", amount: 103500 }, buyer.H);
   const PU2 = await post(`/market/orders/${O2.order_id}/pickup`,
     { pickup_address: "부산 2", pickup_phone: "01011112222" }, seller.H);
   await post("/admin/market/inbound/receive", { code: PU2.inbound_code });
@@ -119,7 +135,7 @@ async function signup(phone, nick, birth) {
 
   // --- 10. 미매칭 입고 → 수동 매칭 ---
   const L3 = await post("/market/listings", { title: "피카츄 프로모", ask_price: 200000 }, seller.H);
-  const O3 = await post("/market/orders", { listing_id: L3.id, address: "서울 4", amount: 203500 }, buyer.H);
+  const O3 = await buyListing({ listing_id: L3.id, address: "서울 4", amount: 203500 }, buyer.H);
   await post(`/market/orders/${O3.order_id}/pickup`, { pickup_address: "부산 3", pickup_phone: "01011112222" }, seller.H);
   const r404 = await raw("/admin/market/inbound/receive", A);
   const un = await post("/admin/market/inbound/receive", { code: "알아볼수없는글씨" });
@@ -129,7 +145,7 @@ async function signup(phone, nick, birth) {
 
   // --- 11. Piku 아이디로 입고 매칭 ---
   const L4 = await post("/market/listings", { title: "이브이 SAR", ask_price: 150000 }, seller.H);
-  const O4 = await post("/market/orders", { listing_id: L4.id, address: "서울 5", amount: 153500 }, buyer.H);
+  const O4 = await buyListing({ listing_id: L4.id, address: "서울 5", amount: 153500 }, buyer.H);
   await post(`/market/orders/${O4.order_id}/pickup`, { pickup_address: "부산 4", pickup_phone: "01011112222" }, seller.H);
   const byNick = await post("/admin/market/inbound/receive", { code: "판매왕" });
   check("11. 닉네임(Piku 아이디)으로 입고 매칭", byNick.matched && byNick.order.id === O4.order_id, byNick);
@@ -137,8 +153,8 @@ async function signup(phone, nick, birth) {
   // --- 12. 여러 건 대기 시 후보 반환 ---
   const L5 = await post("/market/listings", { title: "A", ask_price: 50000 }, seller.H);
   const L6 = await post("/market/listings", { title: "B", ask_price: 60000 }, seller.H);
-  const O5 = await post("/market/orders", { listing_id: L5.id, address: "s", amount: 53500 }, buyer.H);
-  const O6 = await post("/market/orders", { listing_id: L6.id, address: "s", amount: 63500 }, buyer.H);
+  const O5 = await buyListing({ listing_id: L5.id, address: "s", amount: 53500 }, buyer.H);
+  const O6 = await buyListing({ listing_id: L6.id, address: "s", amount: 63500 }, buyer.H);
   await post(`/market/orders/${O5.order_id}/pickup`, { pickup_address: "p", pickup_phone: "01011112222" }, seller.H);
   await post(`/market/orders/${O6.order_id}/pickup`, { pickup_address: "p", pickup_phone: "01011112222" }, seller.H);
   const multi = await post("/admin/market/inbound/receive", { code: "판매왕" });
@@ -146,13 +162,13 @@ async function signup(phone, nick, birth) {
 
   // --- 13. 미성년자 한도에 마켓 결제 합산 ---
   const big = await post("/market/listings", { title: "고가 카드", ask_price: 90000 }, seller.H);
-  const m1 = await post("/market/orders", { listing_id: big.id, address: "서울", amount: 93500 }, minor.H);
+  const m1 = await buyListing({ listing_id: big.id, address: "서울", amount: 93500 }, minor.H);
   check("13-a. 미성년 1회차 구매 통과 (93,500원)", m1.order_id > 0, m1);
   const big2 = await post("/market/listings", { title: "고가 카드2", ask_price: 90000 }, seller.H);
-  const m2 = await post("/market/orders", { listing_id: big2.id, address: "서울", amount: 93500 }, minor.H);
+  const m2 = await buyListing({ listing_id: big2.id, address: "서울", amount: 93500 }, minor.H);
   check("13-b. 미성년 한도 초과 차단 (마켓 합산)", m2.error === "DAILY_LIMIT_MINOR", m2);
   // 마켓에서 93,500원을 썼으므로 10,000원 랜덤팩은 한도(100,000)를 넘겨 차단돼야 한다
-  const packBuy = await post("/purchase", { pack_id: 2, amount: 10000, method: "toss", orderId: "X1" }, minor.H);
+  const packBuy = await buyPack(2, 10000, minor.H);
   check("13-c. 마켓 결제가 랜덤팩 한도에도 반영", packBuy.error === "DAILY_LIMIT_MINOR", packBuy);
 
   // --- 14. 수수료 정책 변경 ---

@@ -1,5 +1,6 @@
 // gacha.js — 추첨 코어 (async, 어댑터 기반)
 const db = require("./db");
+const pay = require("./pay");
 
 // 현재 확률표 (표시용 = 실제 추첨 확률과 동일)
 async function getOdds(packId) {
@@ -10,6 +11,9 @@ async function getOdds(packId) {
   const remainingSlots = pack.total_slots - pack.sold_slots;
   const hitRemaining = hits.reduce((s, h) => s + h.remaining, 0);
   const soldOut = hitRemaining === 0 || remainingSlots <= 0;
+  // 결제 대기 중이라 잡혀 있는 몫. 확률에는 반영하지 않는다 —
+  // 표시 확률은 언제나 실제 추첨 확률과 같아야 하고, 추첨은 sold_slots만 본다.
+  const reserved = await pay.reservedSlots(packId);
   const guaranteed = (await db.all(
     "SELECT id, slot_no, name, image, (awarded_user IS NOT NULL) AS awarded FROM guaranteed WHERE pack_id=? ORDER BY slot_no", [packId]))
     .map((g) => ({ ...g, awarded: !!g.awarded, next: false }));
@@ -20,7 +24,8 @@ async function getOdds(packId) {
             point_price: pack.point_price,
             is_welcome: !!pack.is_welcome, image: pack.image,
             total_slots: pack.total_slots, sold_slots: pack.sold_slots,
-            remaining_slots: remainingSlots, sold_out: soldOut, active: !!pack.active && !soldOut },
+            remaining_slots: remainingSlots, sold_out: soldOut, active: !!pack.active && !soldOut,
+            reserved_slots: reserved, available_slots: Math.max(0, remainingSlots - reserved) },
     hits: hits.map((h) => ({ ...h, probability: remainingSlots > 0 ? h.remaining / remainingSlots : 0 })),
     point_probability: remainingSlots > 0 ? (remainingSlots - hitRemaining) / remainingSlots : 0,
     point_remaining: remainingSlots - hitRemaining,

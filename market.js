@@ -10,6 +10,7 @@
 //   구매자 결제액 buyer_total  = item_price + shipping_fee
 //   판매자 정산액 payout_amount = item_price - fee_amount - inspection_fee
 const db = require("./db");
+const pay = require("./pay");
 
 const CODE_ALPHABET = "ACDEFGHJKLMNPQRTUVWXY3479"; // 0/O/1/I/S/5/B/8/2/Z 등 손글씨 혼동 문자 제외
 function makeCode(n = 6) {
@@ -53,9 +54,9 @@ function quote(itemPrice, st) {
 const parseImages = (v) => { try { const a = JSON.parse(v || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } };
 const listingOut = (l) => ({ ...l, images: parseImages(l.images) });
 
-// deps: { auth, admin, h, confirmPayment } — index.js에서 주입 (인증/결제 로직 중복 방지)
+// deps: { auth, admin, h, cancelPayment, assertPaymentAllowed } — index.js에서 주입 (인증/결제 로직 중복 방지)
 function mount(app, deps) {
-  const { auth, admin, h, confirmPayment, cancelPayment, assertPaymentAllowed } = deps;
+  const { auth, admin, h, cancelPayment, assertPaymentAllowed } = deps;
 
   // ================= 공개 / 사용자 =================
 
@@ -137,11 +138,33 @@ function mount(app, deps) {
     res.json({ ok: true });
   }));
 
-  // 구매 — 결제 승인 후 대금은 Piku가 보관(에스크로). 판매자에게는 아직 지급되지 않는다.
+  // 구매 — 링크 결제라 두 단계다.
+  //   POST /market/orders → 주문번호 + 결제 링크 발급 (매물은 아직 sold가 아니다)
+  //   입금 확인          → 아래 확정 처리기가 매물을 sold로 바꾸고 주문을 만든다
+  // 대금은 검수 통과 시까지 Piku가 보관한다(에스크로). 판매자에게는 아직 지급되지 않는다.
+  pay.register("market", async (c, link) => {
+    const p = JSON.parse(link.payload || "{}");
+    const q = p.quote;
+    // 동시 구매 경합 보호 — active인 행을 sold로 바꾸는 데 성공한 결제만 주문이 된다
+    const upd = await c.run("UPDATE listings SET status='sold', updated_at=? WHERE id=? AND status='active'",
+      [db.NOW(), link.ref_id]);
+    if (!upd.changes) throw new Error("LISTING_UNAVAILABLE");
+    const l = await c.get("SELECT * FROM listings WHERE id=?", [link.ref_id]);
+    const oid = await c.insert(
+      `INSERT INTO market_orders (order_uid, listing_id, buyer_id, seller_id, product_key, title,
+        item_price, fee_rate, fee_amount, inspection_fee, shipping_fee, buyer_total, payout_amount,
+        status, pg_key, buyer_address, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'paid',?,?,?,?)`,
+      [link.uid, l.id, link.user_id, l.seller_id, l.product_key, l.title,
+       q.item_price, q.fee_rate, q.fee_amount, q.inspection_fee, q.shipping_fee, q.buyer_total,
+       q.payout_amount, link.pg_key || link.uid, p.address, db.NOW(), db.NOW()]);
+    return { order_id: oid, order_uid: link.uid, ...q, status: "paid" };
+  });
+
   app.post("/market/orders", auth, h(async (req, res) => {
     const st = await getSettings();
     if (!st.enabled) return res.status(503).json({ error: "MARKET_DISABLED" });
-    const { listing_id, address, paymentKey, orderId, amount } = req.body;
+    const { listing_id, address, amount } = req.body;
     if (!address) return res.status(400).json({ error: "ADDRESS_REQUIRED" });
 
     const listing = await db.get("SELECT * FROM listings WHERE id=?", [Number(listing_id)]);
@@ -149,42 +172,30 @@ function mount(app, deps) {
     if (listing.seller_id === req.userId) return res.status(400).json({ error: "SELF_PURCHASE" });
 
     const q = quote(listing.ask_price, st);
-    if (Number(amount) !== q.buyer_total)
+    if (amount != null && Number(amount) !== q.buyer_total)
       return res.status(400).json({ error: "AMOUNT_MISMATCH", expected: q.buyer_total });
 
-    // 미성년자 일 결제 한도 — PG 승인 "전"에 차단 (랜덤팩과 합산)
+    // 미성년자 일 결제 한도 — 링크를 내주기 "전"에 막는다 (랜덤팩과 합산)
     const blocked = await assertPaymentAllowed(req.userId, q.buyer_total);
     if (blocked) return res.status(403).json(blocked);
 
-    const uid = "MK" + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1000);
-    const pay = await confirmPayment({ paymentKey, orderId: orderId || uid, amount: q.buyer_total });
-    if (!pay.ok) return res.status(402).json({ error: "PAYMENT_FAILED", detail: pay.detail });
+    // 한 장짜리 매물이라 결제 대기가 걸려 있으면 두 번째 구매자를 받지 않는다.
+    // 받아두면 둘 중 하나는 입금 후에 "이미 팔림"을 만나게 되고, 링크 결제는 자동 환불이 안 된다.
+    await pay.sweepExpired();
+    const held = await db.get(
+      "SELECT uid, user_id FROM payment_links WHERE kind='market' AND ref_id=? AND status='pending'", [listing.id]);
+    if (held && Number(held.user_id) !== Number(req.userId))
+      return res.status(409).json({ error: "LISTING_HELD",
+        message: "다른 구매자가 결제 중이에요. 잠시 후 다시 시도해 주세요." });
 
     try {
-      const out = await db.tx(async (c) => {
-        // 동시 구매 경합 보호 — active인 행을 sold로 바꾸는 데 성공한 요청만 주문을 만든다
-        const upd = await c.run("UPDATE listings SET status='sold', updated_at=? WHERE id=? AND status='active'",
-          [db.NOW(), listing.id]);
-        if (!upd.changes) throw new Error("LISTING_UNAVAILABLE");
-        const oid = await c.insert(
-          `INSERT INTO market_orders (order_uid, listing_id, buyer_id, seller_id, product_key, title,
-            item_price, fee_rate, fee_amount, inspection_fee, shipping_fee, buyer_total, payout_amount,
-            status, pg_key, buyer_address, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'paid',?,?,?,?)`,
-          [uid, listing.id, req.userId, listing.seller_id, listing.product_key, listing.title,
-           q.item_price, q.fee_rate, q.fee_amount, q.inspection_fee, q.shipping_fee, q.buyer_total,
-           q.payout_amount, pay.key || "DEV", address, db.NOW(), db.NOW()]);
-        return oid;
-      });
-      res.json({ order_id: out, order_uid: uid, ...q, status: "paid",
+      const out = await pay.createCheckout({
+        kind: "market", userId: req.userId, refId: listing.id, amount: q.buyer_total,
+        title: listing.title, payload: { address, quote: q } });
+      res.json({ ...out, ...q,
         notice: "결제 대금은 검수 통과 시까지 Piku가 보관합니다." });
     } catch (e) {
-      // 결제는 승인됐는데 다른 구매자가 먼저 채간 경우 — 즉시 자동 취소
-      const rf = await cancelPayment({ kind: "market", orderRef: uid, pgKey: pay.key,
-        amount: q.buyer_total, reason: "구매 경합 실패 자동 환불" });
-      res.status(409).json({ error: e.message, refunded: rf.ok, refund_id: rf.refund_id,
-        message: rf.ok ? "다른 구매자가 먼저 구매해 결제가 자동 취소되었습니다."
-          : "결제 취소에 실패했습니다. 고객센터에서 확인 후 환불해드립니다." });
+      res.status(e.status || 400).json({ error: e.message, message: e.message_ko });
     }
   }));
 
@@ -515,7 +526,8 @@ function mount(app, deps) {
   }));
   app.post("/admin/settings", admin, h(async (req, res) => {
     const allowed = ["market_fee_rate", "market_inspection_fee", "market_shipping_fee",
-      "market_enabled", "identity_required"];
+      "market_enabled", "identity_required",
+      "pay_provider", "pay_link_template", "pay_bank", "pay_hold_minutes", "pay_webhook_secret"];
     const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: "NO_FIELDS" });
     for (const [k, v] of updates) {

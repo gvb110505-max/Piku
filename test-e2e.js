@@ -14,6 +14,13 @@ const j = (r) => r.json();
     body: JSON.stringify(body || {}) }).then(j);
   const get = (p, tok) => fetch(B + p, { headers: tok ? { Authorization: tok } : {} }).then(j);
 
+  // 링크 결제는 2단계다 — 링크 발급(/checkout) 후 입금 확인(/confirm-dev)에서 개봉된다.
+  const buy = async (packId, amount, tok) => {
+    const co = await post("/checkout", { pack_id: packId, amount }, tok);
+    if (co.error) return co;
+    return post(`/checkout/${co.uid}/confirm-dev`, {}, tok);
+  };
+
   // 1) 가입 + 1000P
   const { dev_code } = await post("/auth/request-code", { phone: "01012345678" });
   const v = await post("/auth/verify", { phone: "01012345678", code: dev_code, nickname: "세현" });
@@ -31,11 +38,11 @@ const j = (r) => r.json();
   console.log("3. 웰컴팩:", w1.result?.name, "| 2회차:", w2.error === "WELCOME_ALREADY_USED" ? "차단 OK" : "FAIL");
 
   // 4) 유료팩 구매 (테스트 모드)
-  const p1 = await post("/purchase", { pack_id: 1, method: "kakao", orderId: "O1", amount: 5000, paymentKey: "T1" }, T);
-  console.log("4. 구매/추첨:", p1.result.grade, p1.result.name);
+  const p1 = await buy(1, 5000, T);
+  console.log("4. 구매/추첨:", p1.result.result.grade, p1.result.result.name);
 
   // 5) 금액 조작 차단
-  const bad = await post("/purchase", { pack_id: 1, method: "kakao", orderId: "O2", amount: 100, paymentKey: "T2" }, T);
+  const bad = await post("/checkout", { pack_id: 1, amount: 100 }, T);
   console.log("5. 금액조작:", bad.error === "AMOUNT_MISMATCH" ? "차단 OK" : "FAIL");
 
   // 6) 확률 재계산 확인
@@ -43,13 +50,13 @@ const j = (r) => r.json();
   console.log("6. 확률 실시간:", odds.pack.remaining_slots, "슬롯 |", odds.hits.map(h => h.name + " " + (h.probability * 100).toFixed(2) + "%").join(", "));
 
   // 7) 포인트 교환
-  const ex = await post(`/cards/${p1.result.card_id}/exchange`, {}, T);
+  const ex = await post(`/cards/${p1.result.result.card_id}/exchange`, {}, T);
   console.log("7. 포인트 교환: +" + ex.points_added + "P");
 
   // 8) 합배송 신청
-  const p2 = await post("/purchase", { pack_id: 1, method: "toss", orderId: "O3", amount: 5000, paymentKey: "T3" }, T);
-  const p3 = await post("/purchase", { pack_id: 1, method: "toss", orderId: "O4", amount: 5000, paymentKey: "T4" }, T);
-  const sh = await post("/shipments", { card_ids: [p2.result.card_id, p3.result.card_id], address: "서울 강남구 테스트로 1" }, T);
+  const p2 = await buy(1, 5000, T);
+  const p3 = await buy(1, 5000, T);
+  const sh = await post("/shipments", { card_ids: [p2.result.result.card_id, p3.result.result.card_id], address: "서울 강남구 테스트로 1" }, T);
   console.log("8. 합배송:", sh.shipment_id ? `신청 OK (배송비 ${sh.fee}원)` : "FAIL");
 
   // 9) 마이페이지 종합
@@ -66,7 +73,7 @@ const j = (r) => r.json();
   // 11) 미성년자(2011년생) 일 한도 10만원 — 5천원 팩 반복 구매
   let blocked = null, count = 0;
   for (let i = 0; i < 30; i++) {
-    const r = await post("/purchase", { pack_id: 1, method: "toss", orderId: "L" + i, amount: 5000, paymentKey: "T" }, T);
+    const r = await buy(1, 5000, T);
     if (r.error === "DAILY_LIMIT_MINOR") { blocked = r; break; }
     count++;
   }
@@ -85,11 +92,50 @@ const j = (r) => r.json();
   // 13) GUARANTEED 마일스톤 — 50번째 개봉자에게 보장 지급
   let bonus = null;
   for (let i = 0; i < 60; i++) {
-    const r = await post("/purchase", { pack_id: 1, method: "toss", orderId: "G" + i, amount: 5000, paymentKey: "T" }, va.token);
+    const r = await buy(1, 5000, va.token);
     if (r.error) { console.log("13 중단:", r.error); break; }
-    if (r.result.bonus) { bonus = r.result; break; }
+    if (r.result.result.bonus) { bonus = r.result.result; break; }
   }
   console.log("13. GUARANTEED:", bonus ? `OK (#${bonus.draw_no}번째 → ${bonus.bonus.name})` : "FAIL");
+
+  // 14) 링크 결제 — 입금 확인 전에는 아무것도 뽑히지 않고, 슬롯만 예약된다
+  const before = await get("/packs/1");
+  const co = await post("/checkout", { pack_id: 1, amount: 5000 }, va.token);
+  const held = await get("/packs/1");
+  const st1 = await get(`/checkout/${co.uid}`, va.token);
+  const okHold = !!co.uid && st1.status === "pending"
+    && held.pack.sold_slots === before.pack.sold_slots        // 아직 개봉 안 됨
+    && held.pack.reserved_slots === before.pack.reserved_slots + 1
+    && held.pack.remaining_slots === before.pack.remaining_slots; // 표시 확률은 그대로
+  console.log("14. 결제 대기:", okHold ? `OK (${co.uid} 예약, 개봉 없음)` : "FAIL " + JSON.stringify({ co, held: held.pack }));
+
+  const done = await post(`/checkout/${co.uid}/confirm-dev`, {}, va.token);
+  const after = await get("/packs/1");
+  console.log("15. 입금 확인 후 개봉:",
+    done.result?.result?.name && after.pack.sold_slots === before.pack.sold_slots + 1
+      && after.pack.reserved_slots === before.pack.reserved_slots ? "OK " + done.result.result.name : "FAIL " + JSON.stringify(done));
+
+  // 16) 이중 확정 방지 — 웹훅과 관리자 승인이 겹쳐도 한 번만 확정돼야 한다
+  const again = await post(`/checkout/${co.uid}/confirm-dev`, {}, va.token);
+  const after2 = await get("/packs/1");
+  console.log("16. 이중 확정 방지:",
+    again.already && after2.pack.sold_slots === after.pack.sold_slots ? "OK" : "FAIL " + JSON.stringify(again));
+
+  // 17) 취소한 결제는 확정되지 않고 예약도 풀린다
+  const co2 = await post("/checkout", { pack_id: 1, amount: 5000 }, va.token);
+  await post(`/checkout/${co2.uid}/cancel`, {}, va.token);
+  const dead = await post(`/checkout/${co2.uid}/confirm-dev`, {}, va.token);
+  const after3 = await get("/packs/1");
+  console.log("17. 취소 결제:",
+    dead.error === "PAYMENT_NOT_PENDING" && after3.pack.reserved_slots === 0 ? "차단 OK" : "FAIL " + JSON.stringify(dead));
+
+  // 18) 남의 결제는 조회도 확정도 못 한다
+  const co3 = await post("/checkout", { pack_id: 1, amount: 5000 }, va.token);
+  const peek = await get(`/checkout/${co3.uid}`, T);
+  const steal = await post(`/checkout/${co3.uid}/confirm-dev`, {}, T);
+  await post(`/checkout/${co3.uid}/cancel`, {}, va.token);
+  console.log("18. 타인 결제 접근:",
+    peek.error === "PAYMENT_NOT_FOUND" && steal.error === "PAYMENT_NOT_FOUND" ? "차단 OK" : "FAIL");
 
   console.log("\n== E2E 완료 ==");
   process.exit(0);

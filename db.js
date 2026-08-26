@@ -253,6 +253,28 @@ CREATE TABLE IF NOT EXISTS refunds (
   pg_response TEXT, created_at TEXT, done_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS payment_links (
+  id ${ID},
+  uid TEXT NOT NULL UNIQUE,                  -- 주문번호 = 결제 링크에 적히는 코드 (입금자명 대조 키)
+  kind TEXT NOT NULL,                        -- pack | market
+  user_id INTEGER NOT NULL,
+  ref_id INTEGER,                            -- pack_id | listing_id
+  title TEXT,
+  amount INTEGER NOT NULL,
+  provider TEXT NOT NULL DEFAULT 'manual',   -- link(주문서 링크) | manual(무통장) | dev
+  pay_url TEXT,
+  payload TEXT,                              -- 확정 시 필요한 부가 정보(JSON) — 예: 배송지
+  status TEXT NOT NULL DEFAULT 'pending',    -- pending | paid | expired | cancelled | failed
+  expires_at TEXT,                           -- 이 시각까지만 슬롯을 잡아둔다
+  paid_at TEXT, closed_at TEXT,
+  pg_key TEXT,                               -- 제공자 거래번호 (환불 대조용)
+  payer_name TEXT,                           -- 입금자명 — 수동 대조 키
+  confirmed_by TEXT,                         -- webhook | admin:<id> | dev
+  result TEXT,                               -- 확정 결과(JSON) — order_id, 개봉 카드 등
+  fail_reason TEXT,
+  created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS payouts (
   id ${ID}, order_id INTEGER NOT NULL, seller_id INTEGER NOT NULL,
   amount INTEGER NOT NULL,
@@ -271,6 +293,15 @@ const MARKET_DEFAULTS = {
   // 0 = 유예. 기존 가입자는 저장된 생년월일을 그대로 인정한다(서비스 중단 방지).
   // 1 = 강제. 본인확인을 마친 유저만 성인으로 취급하고, 미인증자는 전원 미성년자 한도가 적용된다.
   identity_required: "0",
+
+  // ---- 링크 결제(블로그페이 방식) ----
+  // 앱에 PG SDK를 넣지 않는다. 서버가 주문번호를 만들고 결제 링크를 내려주면
+  // 구매자가 그 링크에서 결제하고, 입금이 확인된 시점에 상품이 확정된다.
+  pay_provider: "manual",         // link = 주문서 링크 / manual = 무통장 입금 / dev = 테스트 자동승인
+  pay_link_template: "",          // 예: https://blogpay.co.kr/order/xxxx?amount={amount}&memo={uid}
+  pay_bank: "",                   // manual일 때 안내할 입금 계좌 (은행 예금주 계좌번호)
+  pay_hold_minutes: "20",         // 결제 대기 동안 슬롯을 잡아두는 시간
+  pay_webhook_secret: "",         // 웹훅 검증용 공유 비밀 (비어 있으면 웹훅 비활성)
 };
 
 async function seed() {
@@ -335,6 +366,8 @@ let _ready = null;
 const ADD_COLUMNS = [
   // 정가 — 할인 표시용. 비어 있으면 할인 UI를 띄우지 않는다.
   ["packs", "list_price", "INTEGER"],
+  // 팩별 결제 링크(블로그페이 주문서 URL). 비어 있으면 기본 링크/무통장 안내로 떨어진다.
+  ["packs", "pay_url", "TEXT"],
 ];
 async function migrate() {
   for (const [table, col, type] of ADD_COLUMNS) {

@@ -15,8 +15,9 @@ const get = (p, h) => fetch(B + p, { headers: h || A }).then(r => r.json());
   const { dev_code } = await post("/auth/request-code", { phone: "01099998888" }, U);
   const v = await post("/auth/verify", { phone: "01099998888", code: dev_code, nickname: "테스터" }, U);
   const T = { "Content-Type": "application/json", Authorization: v.token };
-  const p1 = await post("/purchase", { pack_id: 1, method: "toss", orderId: "A1", amount: 5000, paymentKey: "T" }, T);
-  await post("/shipments", { card_ids: [p1.result.card_id], address: "서울 어딘가 1" }, T);
+  const co1 = await post("/checkout", { pack_id: 1, amount: 5000 }, T);
+  const p1 = await post(`/checkout/${co1.uid}/confirm-dev`, {}, T);
+  await post("/shipments", { card_ids: [p1.result.result.card_id], address: "서울 어딘가 1" }, T);
 
   // 1) 잘못된 토큰 차단
   const bad = await get("/admin/overview", { "x-admin-token": "wrong" });
@@ -55,11 +56,26 @@ const get = (p, h) => fetch(B + p, { headers: h || A }).then(r => r.json());
   const ships = await get("/admin/shipments");
   await post(`/admin/shipments/${ships[0].id}`, { status: "shipped", tracking: "1234-5678" });
   const me = await get("/me", T);
-  console.log("7. 배송 처리:", me.cards.find(c => c.id === p1.result.card_id).status === "shipped" ? "발송+카드상태 OK" : "FAIL");
+  console.log("7. 배송 처리:", me.cards.find(c => c.id === p1.result.result.card_id).status === "shipped" ? "발송+카드상태 OK" : "FAIL");
 
   // 8) 주문/유저 목록
   const [orders, users] = await Promise.all([get("/admin/orders"), get("/admin/users")]);
   console.log("8. 주문/유저 목록:", orders.length >= 1 && users.length >= 1 ? "OK" : "FAIL");
+
+  // 9) 결제 대사 — 관리자가 입금을 확인해야 개봉된다
+  const co = await post("/checkout", { pack_id: 1, amount: 5000 }, T);
+  const openList = await get("/admin/payments");
+  const row = openList.payments.find(p => p.uid === co.uid);
+  console.log("9. 결제 대사 목록:", row && row.status === "pending" && row.nickname === "테스터" ? "OK" : "FAIL");
+
+  const conf = await post(`/admin/payments/${co.uid}/confirm`, { payer_name: "테스터", pg_key: "TID-1" });
+  console.log("10. 관리자 입금 확인 → 개봉:", conf.result?.result?.name ? "OK " + conf.result.result.name : "FAIL " + JSON.stringify(conf));
+
+  const co2 = await post("/checkout", { pack_id: 1, amount: 5000 }, T);
+  const rej = await post(`/admin/payments/${co2.uid}/reject`, { reason: "입금 없음" });
+  const after = await get("/admin/payments?status=all");
+  const row2 = after.payments.find(p => p.uid === co2.uid);
+  console.log("11. 결제 반려:", rej.ok && row2.status === "cancelled" ? "OK" : "FAIL");
 
   console.log("\n== 관리자 API 전체 통과 ==");
   process.exit(0);
