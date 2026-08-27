@@ -85,11 +85,14 @@ function messageOf(d: any): string | null {
 export type Pack = {
   id: number; name: string; price: number; list_price: number | null; point_price: number; is_welcome: boolean;
   image: string; total_slots: number; sold_slots: number; remaining_slots: number;
-  sold_out: boolean; active: boolean;
+  sold_out: boolean; active: boolean; reserved_slots?: number; available_slots?: number;
 };
 export type Hit = { id: number; name: string; image: string; total_qty: number; remaining: number; point_value: number; probability: number };
-export type Guaranteed = { id: number; slot_no: number; name: string; image: string; awarded: boolean; next: boolean };
-export type Odds = { pack: Pack; hits: Hit[]; point_probability: number; point_remaining: number; guaranteed: Guaranteed[]; viewers?: number };
+export type Guaranteed = { id: number; slot_no: number; name: string; image: string;
+  point_value: number; kind: "guaranteed" | "last_one"; awarded: boolean; next: boolean };
+// last_one = 마지막 1구를 여는 사람이 받는 상품. 보장 목록과 따로 온다.
+export type Odds = { pack: Pack; hits: Hit[]; point_probability: number; point_remaining: number;
+  guaranteed: Guaranteed[]; last_one: Guaranteed | null; viewers?: number };
 // ---------- 링크 결제 ----------
 // 앱은 결제를 직접 처리하지 않는다. 서버가 발급한 주문번호(uid)와 결제 링크를 받아
 // 링크를 열어주고, 입금이 확인될 때까지 상태만 지켜본다.
@@ -102,7 +105,7 @@ export type Checkout = {
   result?: { order_id: number; result?: DrawResult; order_uid?: string; status?: string } | null;
 };
 export type DrawResult = { grade: string; name: string; image: string; point_value: number; card_id: number; draw_no: number;
-  bonus: { name: string; slot_no: number; point_value: number } | null };
+  bonus: { name: string; slot_no: number; point_value: number; kind?: "guaranteed" | "last_one" } | null };
 export type OwnedCard = { id: number; name: string; grade: string; image: string; point_value: number; status: string; pack_name: string; created_at: string };
 export type Listing = { id: number; seller_id: number; seller_nickname?: string; kind: string; title: string;
   card_set: string | null; grade: string | null; condition: string | null; product_key: string;

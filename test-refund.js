@@ -55,15 +55,16 @@ async function buyListing(body, H) {
   // HIT 재고를 0으로 만들어 SOLD_OUT을 유도한다. 링크 결제는 자동 환불이 불가능하므로
   // 결제를 되돌리는 대신 payment_links를 failed로 못 박고 환불 원장을 자동 접수해야 한다.
   const ov = await get("/admin/overview");
-  const p1 = ov.packs.find((p) => p.id === 1);
-  const co1 = await post("/checkout", { pack_id: 1, amount: 5000 }, Bu.H);
+  // 카탈로그가 바뀌어도 깨지지 않게 팩은 가격으로 찾는다
+  const p1 = ov.packs.find((p) => p.price === 5000 && !p.is_welcome);
+  const co1 = await post("/checkout", { pack_id: p1.id, amount: 5000 }, Bu.H);
   check("1-a. 결제 링크 발급", !!co1.uid && co1.status === "pending", co1);
 
   const devConfirm = await post(`/checkout/${co1.uid}/confirm-dev`, {}, Bu.H);
   check("1-b. 운영 모드에서 개발용 자동승인 차단", devConfirm.error === "DEV_CONFIRM_DISABLED", devConfirm);
 
   for (const hit of p1.hits) await post(`/admin/hits/${hit.id}`, { remaining: 0 });
-  await post("/admin/packs/1", { active: 1 }); // 판매중으로 되돌려 확정까지 도달시킨다
+  await post(`/admin/packs/${p1.id}`, { active: 1 }); // 판매중으로 되돌려 확정까지 도달시킨다
 
   const settled = await post(`/admin/payments/${co1.uid}/confirm`, { payer_name: "구매왕" });
   check("1-c. 확정 실패 시 환불 요청 접수", settled.error === "SOLD_OUT" && settled.refund_requested === true, settled);
@@ -72,7 +73,7 @@ async function buyListing(body, H) {
   const rl = await get("/admin/refunds");
   check("1-e. 환불 원장에 requested 기록", rl[0].status === "requested" && rl[0].kind === "pack"
     && rl[0].amount === 5000 && rl[0].order_ref === co1.uid, rl[0]);
-  const packSlots = await get("/packs/1");
+  const packSlots = await get(`/packs/${p1.id}`);
   check("1-f. 확정 실패분은 슬롯을 먹지 않음", packSlots.pack.sold_slots === 0
     && packSlots.pack.reserved_slots === 0, packSlots.pack);
 

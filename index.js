@@ -8,6 +8,7 @@ const path = require("path");
 const db = require("./db");
 const { getOdds, draw } = require("./gacha");
 const pay = require("./pay");
+const catalog = require("./catalog");
 
 const app = express();
 
@@ -243,7 +244,8 @@ function trackViewer(packId, key) {
 }
 
 app.get("/packs", h(async (req, res) => {
-  const ids = await db.all("SELECT id FROM packs ORDER BY id");
+  // archived = 카탈로그 리셋으로 물러난 옛 팩. 주문 이력 때문에 지우지 않고 숨긴다.
+  const ids = await db.all("SELECT id FROM packs WHERE COALESCE(archived,0)=0 ORDER BY price DESC, id");
   res.json(await Promise.all(ids.map((p) => getOdds(p.id))));
 }));
 
@@ -496,7 +498,7 @@ app.get("/admin/overview", admin, h(async (req, res) => {
     db.get("SELECT COALESCE(SUM(amount),0) AS s, COUNT(*) AS c FROM orders WHERE status='paid'"),
     db.get("SELECT COUNT(*) AS c FROM users"),
     db.get("SELECT COUNT(*) AS c FROM shipments WHERE status!='shipped'"),
-    db.all("SELECT * FROM packs ORDER BY id"),
+    db.all("SELECT * FROM packs ORDER BY COALESCE(archived,0), price DESC, id"),
     db.all("SELECT * FROM hits ORDER BY id"),
     db.all("SELECT * FROM point_pool ORDER BY id"),
     db.all("SELECT pack_id, COUNT(*) AS c FROM orders GROUP BY pack_id"),
@@ -659,6 +661,44 @@ app.get("/images/:id", h(async (req, res) => {
 
 app.get("/admin/images", admin, h(async (req, res) => {
   res.json(await db.all("SELECT id, mime, bytes, label, created_at FROM images ORDER BY id DESC LIMIT 100"));
+}));
+
+// 카탈로그 리셋 — 판매 상품을 전부 새로 깐다.
+// 주문이 붙은 팩은 지우면 이력이 끊기므로 archived로 숨기고, 주문이 없는 팩만 실제로 지운다.
+app.post("/admin/catalog/reset", admin, h(async (req, res) => {
+  if (String(req.body.confirm || "") !== "RESET")
+    return res.status(400).json({ error: "CONFIRM_REQUIRED",
+      message: 'confirm 값에 "RESET"을 보내야 실행됩니다.' });
+
+  await pay.sweepExpired();
+  const pending = await db.get("SELECT COUNT(*) AS c FROM payment_links WHERE status='pending'");
+  if (Number(pending.c) > 0)
+    return res.status(409).json({ error: "PENDING_PAYMENTS", count: Number(pending.c),
+      message: "결제 대기 중인 주문이 있습니다. 확정하거나 반려한 뒤 다시 시도하세요." });
+
+  const out = await db.tx(async (c) => {
+    const packs = await c.all("SELECT id FROM packs");
+    const used = await c.all("SELECT DISTINCT pack_id FROM orders");
+    const usedIds = new Set(used.map((r) => Number(r.pack_id)));
+
+    let archived = 0, removed = 0;
+    for (const p of packs) {
+      if (usedIds.has(Number(p.id))) {
+        await c.run("UPDATE packs SET active=0, archived=1 WHERE id=?", [p.id]);
+        archived++;
+      } else {
+        for (const t of ["hits", "guaranteed", "point_pool"])
+          await c.run(`DELETE FROM ${t} WHERE pack_id=?`, [p.id]);
+        await c.run("DELETE FROM packs WHERE id=?", [p.id]);
+        removed++;
+      }
+    }
+    const made = await catalog.insertCatalog(c);
+    return { archived, removed, created: made.pack_ids.length + 1 };
+  });
+
+  res.json({ ok: true, ...out,
+    message: `상품 ${out.created}개를 새로 만들었습니다. 주문이 없던 ${out.removed}개는 삭제, 주문 이력이 있는 ${out.archived}개는 보관 처리했습니다.` });
 }));
 
 app.get("/admin/refunds", admin, h(async (req, res) => {

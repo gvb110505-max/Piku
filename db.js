@@ -138,7 +138,8 @@ CREATE TABLE IF NOT EXISTS hits (
 );
 CREATE TABLE IF NOT EXISTS guaranteed (
   id ${ID}, pack_id INTEGER NOT NULL, slot_no INTEGER NOT NULL, name TEXT NOT NULL,
-  image TEXT, point_value INTEGER NOT NULL DEFAULT 0, awarded_user INTEGER
+  image TEXT, point_value INTEGER NOT NULL DEFAULT 0, awarded_user INTEGER,
+  kind TEXT NOT NULL DEFAULT 'guaranteed'   -- guaranteed | last_one(마지막 1구 상품)
 );
 CREATE TABLE IF NOT EXISTS point_pool (
   id ${ID}, pack_id INTEGER NOT NULL, name TEXT NOT NULL, rarity TEXT NOT NULL,
@@ -314,47 +315,7 @@ async function seed() {
   const cnt = await c.get("SELECT COUNT(*) AS c FROM packs");
   if (Number(cnt.c) > 0) return;
 
-  const pack = (name, price, pp, w, slots, img, listPrice) =>
-    c.insert("INSERT INTO packs (name, price, point_price, is_welcome, total_slots, image, list_price) VALUES (?,?,?,?,?,?,?)",
-      [name, price, pp, w, slots, img, listPrice || null]);
-  const hit = (pid, name, img, qty, pv, cost) =>
-    c.run("INSERT INTO hits (pack_id, name, grade, image, total_qty, remaining, point_value, cost) VALUES (?,?,'HIT',?,?,?,?,?)",
-      [pid, name, img, qty, qty, pv, cost]);
-  const g = (pid, no, name, img, pv) =>
-    c.run("INSERT INTO guaranteed (pack_id, slot_no, name, image, point_value) VALUES (?,?,?,?,?)", [pid, no, name, img, pv]);
-  const pool = (pid, name, r, img, w) =>
-    c.run("INSERT INTO point_pool (pack_id, name, rarity, image, weight) VALUES (?,?,?,?,?)", [pid, name, r, img, w]);
-
-  const p5 = await pack("스타터 랜덤팩", 5000, 0, 0, 200, "pack_5000", 8000);
-  await hit(p5, "피카츄 AR", "pikachu_ar", 5, 25000, 28000);
-  await hit(p5, "이브이 SR", "eevee_sr", 3, 40000, 45000);
-  await hit(p5, "리자몽 EX", "charizard_ex", 1, 120000, 130000);
-  for (const n of [50, 100, 150, 200]) await g(p5, n, "[JP] 메가 하이클래스팩 박스", "box_mega", 60000);
-
-  const p10 = await pack("레귤러 랜덤팩", 10000, 0, 0, 300, "pack_10000", 14000);
-  await hit(p10, "뮤 EX", "mew_ex", 4, 60000, 70000);
-  await hit(p10, "리자몽 SAR", "charizard_sar", 2, 180000, 200000);
-  await hit(p10, "이상해꽃 SAR", "venusaur_sar", 2, 90000, 100000);
-  for (const n of [75, 150, 225, 300]) await g(p10, n, "[JP] 하이클래스팩 박스 ×2", "box_double", 120000);
-
-  const p50 = await pack("프리미엄 랜덤팩", 50000, 0, 0, 100, "pack_50000", 65000);
-  await hit(p50, "리자몽 SAR (PSA10)", "charizard_psa10", 1, 900000, 950000);
-  await hit(p50, "뮤츠 UR", "mewtwo_ur", 2, 350000, 380000);
-  await hit(p50, "피카츄 프로모", "pikachu_promo", 5, 120000, 130000);
-  for (const n of [50, 100]) await g(p50, n, "[JP] 박스 세트 + 슬리브", "box_set", 500000);
-
-  const pw = await pack("웰컴 팩", 0, 1000, 1, 500, "pack_welcome");
-  await hit(pw, "피카츄 프로모(웰컴)", "pikachu_welcome", 20, 5000, 3000);
-
-  for (const pid of [p5, p10, p50, pw]) {
-    await pool(pid, "꼬부기", "common", "squirtle", 30);
-    await pool(pid, "파이리", "common", "charmander", 30);
-    await pool(pid, "이상해씨", "common", "bulbasaur", 30);
-    await pool(pid, "피카츄", "uncommon", "pikachu", 15);
-    await pool(pid, "이브이", "uncommon", "eevee", 15);
-    await pool(pid, "망나뇽", "rare", "dragonite", 5);
-    await pool(pid, "갸라도스", "rare", "gyarados", 5);
-  }
+  await require("./catalog").insertCatalog(c);
 }
 
 const ready = usePg || sqliteAvailable; // DB 사용 가능 여부
@@ -368,6 +329,10 @@ const ADD_COLUMNS = [
   ["packs", "list_price", "INTEGER"],
   // 팩별 결제 링크(블로그페이 주문서 URL). 비어 있으면 기본 링크/무통장 안내로 떨어진다.
   ["packs", "pay_url", "TEXT"],
+  // 라스트원(마지막 1구 상품)과 일반 보장을 구분한다
+  ["guaranteed", "kind", "TEXT NOT NULL DEFAULT 'guaranteed'"],
+  // 카탈로그 리셋으로 물러난 옛 팩. 주문 이력이 있어 지우지 않고 숨긴다.
+  ["packs", "archived", "INTEGER NOT NULL DEFAULT 0"],
 ];
 async function migrate() {
   for (const [table, col, type] of ADD_COLUMNS) {

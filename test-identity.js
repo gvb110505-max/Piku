@@ -30,6 +30,10 @@ async function buy(packId, amount, H) {
 (async () => {
   await new Promise((r) => setTimeout(r, 600));
 
+  // 카탈로그가 바뀌어도 깨지지 않게 팩은 가격으로 찾는다
+  const catalog = await get("/packs", { "Content-Type": "application/json" });
+  const P50 = catalog.find((x) => x.pack.price === 50000 && !x.pack.is_welcome).pack.id;
+
   // ---- 1. 가입 시 클라이언트가 보낸 생년월일은 무시된다 (핵심) ----
   const liar = await signup("01011112222", "위조범", "19900101"); // 성인이라고 주장
   check("1-a. 가입 응답에서 미성년자 취급", liar.user.is_minor === true, liar.user);
@@ -38,10 +42,10 @@ async function buy(packId, amount, H) {
   check("1-c. 자기 입력 생년월일이 저장되지 않음", st.verified === false && st.is_minor === true, st);
 
   // 실제로 한도가 걸리는지 — 자기 입력이 먹혔다면 통과했을 금액
-  const over = await buy(3, 50000, liar.H);
+  const over = await buy(P50, 50000, liar.H);
   check("1-d. 5만원 구매는 통과", over.order_id > 0, over);
-  await buy(3, 50000, liar.H);
-  const over2 = await buy(3, 50000, liar.H);   // 누적 15만원 → 한도 초과
+  await buy(P50, 50000, liar.H);
+  const over2 = await buy(P50, 50000, liar.H);   // 누적 15만원 → 한도 초과
   check("1-e. 누적 10만원 초과분 차단", over2.error === "DAILY_LIMIT_MINOR", over2);
   check("1-f. 차단 사유에 미인증 안내", over2.verified === false
     && over2.message.includes("본인확인"), over2.message);
@@ -53,7 +57,7 @@ async function buy(packId, amount, H) {
   check("2-a. 인증 후 성인 판정", st2.verified === true && st2.is_minor === false, st2);
   let ok = true;
   for (let i = 0; i < 4; i++) {
-    const r = await buy(3, 50000, adult.H);
+    const r = await buy(P50, 50000, adult.H);
     if (!r.order_id) { ok = false; break; }
   }
   check("2-b. 인증 성인은 한도 없음 (20만원 결제)", ok);
@@ -63,9 +67,9 @@ async function buy(packId, amount, H) {
   await post("/identity/dev-verify", { birth: "20100505" }, teen.H);
   const st3 = await get("/identity/status", teen.H);
   check("3-a. 인증 결과가 미성년", st3.verified === true && st3.is_minor === true, st3);
-  await buy(3, 50000, teen.H);
-  await buy(3, 50000, teen.H);
-  const blocked = await buy(3, 50000, teen.H);
+  await buy(P50, 50000, teen.H);
+  await buy(P50, 50000, teen.H);
+  const blocked = await buy(P50, 50000, teen.H);
   check("3-b. 인증된 미성년자도 한도 적용", blocked.error === "DAILY_LIMIT_MINOR", blocked);
   check("3-c. 차단 사유는 나이 안내", blocked.verified === true
     && blocked.message.includes("19세"), blocked.message);

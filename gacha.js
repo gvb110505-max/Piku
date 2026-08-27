@@ -14,9 +14,13 @@ async function getOdds(packId) {
   // 결제 대기 중이라 잡혀 있는 몫. 확률에는 반영하지 않는다 —
   // 표시 확률은 언제나 실제 추첨 확률과 같아야 하고, 추첨은 sold_slots만 본다.
   const reserved = await pay.reservedSlots(packId);
-  const guaranteed = (await db.all(
-    "SELECT id, slot_no, name, image, (awarded_user IS NOT NULL) AS awarded FROM guaranteed WHERE pack_id=? ORDER BY slot_no", [packId]))
-    .map((g) => ({ ...g, awarded: !!g.awarded, next: false }));
+  const rows = (await db.all(
+    `SELECT id, slot_no, name, image, point_value, kind, (awarded_user IS NOT NULL) AS awarded
+     FROM guaranteed WHERE pack_id=? ORDER BY slot_no`, [packId]))
+    .map((g) => ({ ...g, kind: g.kind || "guaranteed", awarded: !!g.awarded, next: false }));
+  // 라스트원은 마지막 1구를 여는 사람 몫이라 보장 목록과 따로 내려준다
+  const lastOne = rows.find((g) => g.kind === "last_one") || null;
+  const guaranteed = rows.filter((g) => g.kind !== "last_one");
   const nextG = guaranteed.find((g) => !g.awarded && g.slot_no > pack.sold_slots);
   if (nextG) nextG.next = true;
   return {
@@ -30,6 +34,7 @@ async function getOdds(packId) {
     point_probability: remainingSlots > 0 ? (remainingSlots - hitRemaining) / remainingSlots : 0,
     point_remaining: remainingSlots - hitRemaining,
     guaranteed,
+    last_one: lastOne,
   };
 }
 
@@ -68,13 +73,17 @@ async function draw(c, userId, packId) {
 
   // GUARANTEED: 방금 뽑기가 N번째면 보장 상품 추가 지급
   const newCount = pack.sold_slots + 1;
-  const g = await c.get("SELECT * FROM guaranteed WHERE pack_id=? AND slot_no=? AND awarded_user IS NULL", [packId, newCount]);
+  // 라스트원(slot_no = 총 슬롯)도 같은 규칙으로 지급된다 — 마지막 1구를 연 사람 몫.
+  const g = await c.get("SELECT * FROM guaranteed WHERE pack_id=? AND slot_no=? AND awarded_user IS NULL ORDER BY (CASE WHEN kind='last_one' THEN 0 ELSE 1 END)",
+    [packId, newCount]);
   let bonus = null;
   if (g) {
+    const kind = g.kind || "guaranteed";
+    const suffix = kind === "last_one" ? " (LAST ONE)" : " (GUARANTEED)";
     await c.run("UPDATE guaranteed SET awarded_user=? WHERE id=?", [userId, g.id]);
     await c.run("INSERT INTO owned_cards (user_id, name, grade, image, point_value, pack_name, created_at) VALUES (?,?,'HIT',?,?,?,?)",
-      [userId, g.name + " (GUARANTEED)", g.image, g.point_value, pack.name, db.NOW()]);
-    bonus = { name: g.name, slot_no: g.slot_no, point_value: g.point_value };
+      [userId, g.name + suffix, g.image, g.point_value, pack.name, db.NOW()]);
+    bonus = { name: g.name, slot_no: g.slot_no, point_value: g.point_value, kind };
   }
 
   const left = await c.get("SELECT COALESCE(SUM(remaining),0) AS s FROM hits WHERE pack_id=?", [packId]);

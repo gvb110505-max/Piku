@@ -45,6 +45,9 @@ async function buyPack(packId, amount, H) {
 (async () => {
   await new Promise((r) => setTimeout(r, 600));
 
+  const catalog = await get("/packs", { "Content-Type": "application/json" });
+  const P10 = catalog.find((x) => x.pack.price === 10000 && !x.pack.is_welcome).pack.id;
+
   const seller = await signup("01011112222", "판매왕", "19900101");
   const buyer  = await signup("01033334444", "구매왕", "19900101");
   const minor  = await signup("01055556666", "미성년", "20120101");
@@ -168,7 +171,7 @@ async function buyPack(packId, amount, H) {
   const m2 = await buyListing({ listing_id: big2.id, address: "서울", amount: 93500 }, minor.H);
   check("13-b. 미성년 한도 초과 차단 (마켓 합산)", m2.error === "DAILY_LIMIT_MINOR", m2);
   // 마켓에서 93,500원을 썼으므로 10,000원 랜덤팩은 한도(100,000)를 넘겨 차단돼야 한다
-  const packBuy = await buyPack(2, 10000, minor.H);
+  const packBuy = await buyPack(P10, 10000, minor.H);
   check("13-c. 마켓 결제가 랜덤팩 한도에도 반영", packBuy.error === "DAILY_LIMIT_MINOR", packBuy);
 
   // --- 14. 수수료 정책 변경 ---

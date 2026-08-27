@@ -31,7 +31,10 @@ const get = (p, h) => fetch(B + p, { headers: h || A }).then(r => r.json());
   const { dev_code } = await post("/auth/request-code", { phone: "01099998888" }, U);
   const v = await post("/auth/verify", { phone: "01099998888", code: dev_code, nickname: "테스터" }, U);
   const T = { "Content-Type": "application/json", Authorization: v.token };
-  const co1 = await post("/checkout", { pack_id: 1, amount: 5000 }, T);
+  // 카탈로그가 바뀌어도 깨지지 않게 팩은 가격으로 찾는다
+  const catalog = await get("/packs", U);
+  const P5 = catalog.find((x) => x.pack.price === 5000 && !x.pack.is_welcome).pack.id;
+  const co1 = await post("/checkout", { pack_id: P5, amount: 5000 }, T);
   const p1 = await post(`/checkout/${co1.uid}/confirm-dev`, {}, T);
   await post("/shipments", { card_ids: [p1.result.result.card_id], address: "서울 어딘가 1" }, T);
 
@@ -79,7 +82,7 @@ const get = (p, h) => fetch(B + p, { headers: h || A }).then(r => r.json());
   console.log("8. 주문/유저 목록:", orders.length >= 1 && users.length >= 1 ? "OK" : "FAIL");
 
   // 9) 결제 대사 — 관리자가 입금을 확인해야 개봉된다
-  const co = await post("/checkout", { pack_id: 1, amount: 5000 }, T);
+  const co = await post("/checkout", { pack_id: P5, amount: 5000 }, T);
   const openList = await get("/admin/payments");
   const row = openList.payments.find(p => p.uid === co.uid);
   console.log("9. 결제 대사 목록:", row && row.status === "pending" && row.nickname === "테스터" ? "OK" : "FAIL");
@@ -87,7 +90,7 @@ const get = (p, h) => fetch(B + p, { headers: h || A }).then(r => r.json());
   const conf = await post(`/admin/payments/${co.uid}/confirm`, { payer_name: "테스터", pg_key: "TID-1" });
   console.log("10. 관리자 입금 확인 → 개봉:", conf.result?.result?.name ? "OK " + conf.result.result.name : "FAIL " + JSON.stringify(conf));
 
-  const co2 = await post("/checkout", { pack_id: 1, amount: 5000 }, T);
+  const co2 = await post("/checkout", { pack_id: P5, amount: 5000 }, T);
   const rej = await post(`/admin/payments/${co2.uid}/reject`, { reason: "입금 없음" });
   const after = await get("/admin/payments?status=all");
   const row2 = after.payments.find(p => p.uid === co2.uid);

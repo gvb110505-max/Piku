@@ -1,6 +1,8 @@
 // 홈 — 상점 화면.
 //
-// 골격은 커머스 앱 그대로다: 인사말 → 탭 칩 → 배너 캐러셀 → 숏컷 → 상품 그리드 → 레일.
+// 골격은 커머스 앱 그대로다: 인사말 → 탭 칩 → 프리미엄 배너 → 숏컷 → 일반 상품 슬라이드 → 레일.
+// 상단 큰 화면에는 비싼 팩(프리미엄)이 비싼 순으로 들어가고,
+// 나머지 일반 상품은 세로 2칸씩 묶어 가로로 민다.
 // 각 자리에는 광고 문구 대신 실제 값(이름 · 가격 · 잔여 수량)만 넣는다.
 // 확률은 홈에 적지 않는다 — 목록에 %가 박히면 상점이 아니라 통계표로 읽힌다.
 // 확률표는 팩 상세에서 전체를 한 번에 본다.
@@ -13,7 +15,7 @@ import { View, Text, Pressable, ScrollView, RefreshControl, StyleSheet } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Sub, Button, Loading, ErrorBox } from "@/components/ui";
-import { PackCard } from "@/components/PackCard";
+import { PackSlider } from "@/components/PackSlider";
 import { HitFeed } from "@/components/HitFeed";
 import { HomeHero } from "@/components/HomeHero";
 import { QuickRow, Quick } from "@/components/QuickRow";
@@ -80,7 +82,14 @@ export default function Home() {
   useFocusEffect(useCallback(() => { refresh(); loadSide(); }, [refresh, loadSide]));
 
   const welcome = packs?.find((p) => p.pack.is_welcome);
-  const normal = useMemo(() => packs?.filter((p) => !p.pack.is_welcome) ?? [], [packs]);
+  // 서버가 비싼 순으로 내려주지만, 순서에 기대지 않고 여기서 한 번 더 정렬한다
+  const sellable = useMemo(
+    () => (packs?.filter((p) => !p.pack.is_welcome) ?? []).sort((a, b) => b.pack.price - a.pack.price),
+    [packs]);
+  // 상단 큰 화면 = 제일 비싼 팩부터. 나머지는 아래 가로 슬라이드로.
+  const HERO_COUNT = 3;
+  const premium = sellable.slice(0, HERO_COUNT);
+  const normal = sellable.slice(HERO_COUNT);
   const welcomeUsed = !!me?.user.welcome_used;
   const canWelcome = !!welcome && !welcomeUsed && !welcome.pack.sold_out;
 
@@ -141,9 +150,9 @@ export default function Home() {
         {err ? <ErrorBox message={err} onRetry={load} /> : null}
         {!packs && !err ? <Loading text="확률 불러오는 중" /> : null}
 
-        {showPacks && normal.length ? (
+        {showPacks && premium.length ? (
           <View style={{ marginTop: 18 }}>
-            <HomeHero packs={normal} onOpen={(id) => router.push(`/pack/${id}`)} />
+            <HomeHero packs={premium} onOpen={(id) => router.push(`/pack/${id}`)} />
           </View>
         ) : null}
 
@@ -151,11 +160,9 @@ export default function Home() {
 
         {showPacks && normal.length ? (
           <>
-            <Head title="랜덤팩" note={`${normal.length}종`} />
-            <View style={st.grid}>
-              {normal.map((o) => (
-                <PackCard key={o.pack.id} o={o} onPress={() => router.push(`/pack/${o.pack.id}`)} />
-              ))}
+            <Head title="랜덤팩" note={`${sellable.length}종`} />
+            <View style={{ marginTop: 14 }}>
+              <PackSlider packs={normal} onOpen={(id) => router.push(`/pack/${id}`)} />
             </View>
           </>
         ) : null}
@@ -216,6 +223,5 @@ const st = StyleSheet.create({
   headNote: { ...T, color: C.n500, fontSize: 11 },
   more: { flexDirection: "row", alignItems: "center", gap: 2 },
 
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 14 },
   welcome: { borderTopWidth: 1, borderTopColor: C.lineSoft, paddingTop: 14, marginTop: 8 },
 });

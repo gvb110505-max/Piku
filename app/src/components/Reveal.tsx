@@ -80,9 +80,14 @@ export function Reveal({ result, packName, onExchange, onShip, onDone }: {
           </Text>
 
           {result.bonus ? (
-            <View style={st.bonus}>
-              <Text style={st.bonusTitle}>GUARANTEED #{result.bonus.slot_no}</Text>
+            <View style={[st.bonus, result.bonus.kind === "last_one" && st.bonusLast]}>
+              <Text style={[st.bonusTitle, result.bonus.kind === "last_one" && { color: C.brand }]}>
+                {result.bonus.kind === "last_one" ? "LAST ONE · 마지막 1구" : "GUARANTEED #" + result.bonus.slot_no}
+              </Text>
               <Text style={st.bonusName}>{result.bonus.name}</Text>
+              <Text style={[st.bonusValue, result.bonus.kind === "last_one" && { color: C.brand }]}>
+                {pt(result.bonus.point_value)}
+              </Text>
             </View>
           ) : null}
 
@@ -125,7 +130,9 @@ const st = StyleSheet.create({
   bonus: { marginTop: 14, backgroundColor: C.hitSoft, borderWidth: 1, borderColor: C.hit + "66",
     borderRadius: R.md, paddingHorizontal: 16, paddingVertical: 12, alignItems: "center", gap: 3 },
   bonusTitle: { ...T, color: C.hit, fontWeight: "700", fontSize: 10, letterSpacing: 1.4 },
+  bonusLast: { backgroundColor: C.brandSoft, borderColor: C.brandLine },
   bonusName: { ...T, color: C.text, fontWeight: "600", fontSize: 13 },
+  bonusValue: { ...NUM, color: C.hit, fontWeight: "700", fontSize: 12.5, marginTop: 2 },
   actions: { flexDirection: "row", gap: 10, marginTop: 24, width: "100%" },
   btn: { flex: 1, height: 50, borderRadius: R.pill, alignItems: "center", justifyContent: "center" },
   btnGhost: { borderWidth: 1, borderColor: C.lineStrong },

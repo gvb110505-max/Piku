@@ -14,6 +14,15 @@ const j = (r) => r.json();
     body: JSON.stringify(body || {}) }).then(j);
   const get = (p, tok) => fetch(B + p, { headers: tok ? { Authorization: tok } : {} }).then(j);
 
+  // 카탈로그가 바뀌어도 깨지지 않게 팩은 가격으로 찾는다
+  const catalog = await get("/packs");
+  const byPrice = (won) => {
+    const o = catalog.find((x) => x.pack.price === won && !x.pack.is_welcome);
+    if (!o) throw new Error("가격 " + won + "원 팩이 카탈로그에 없습니다");
+    return o.pack.id;
+  };
+  const P5 = byPrice(5000);
+
   // 링크 결제는 2단계다 — 링크 발급(/checkout) 후 입금 확인(/confirm-dev)에서 개봉된다.
   const buy = async (packId, amount, tok) => {
     const co = await post("/checkout", { pack_id: packId, amount }, tok);
@@ -38,15 +47,15 @@ const j = (r) => r.json();
   console.log("3. 웰컴팩:", w1.result?.name, "| 2회차:", w2.error === "WELCOME_ALREADY_USED" ? "차단 OK" : "FAIL");
 
   // 4) 유료팩 구매 (테스트 모드)
-  const p1 = await buy(1, 5000, T);
+  const p1 = await buy(P5, 5000, T);
   console.log("4. 구매/추첨:", p1.result.result.grade, p1.result.result.name);
 
   // 5) 금액 조작 차단
-  const bad = await post("/checkout", { pack_id: 1, amount: 100 }, T);
+  const bad = await post("/checkout", { pack_id: P5, amount: 100 }, T);
   console.log("5. 금액조작:", bad.error === "AMOUNT_MISMATCH" ? "차단 OK" : "FAIL");
 
   // 6) 확률 재계산 확인
-  const odds = await get("/packs/1");
+  const odds = await get(`/packs/${P5}`);
   console.log("6. 확률 실시간:", odds.pack.remaining_slots, "슬롯 |", odds.hits.map(h => h.name + " " + (h.probability * 100).toFixed(2) + "%").join(", "));
 
   // 7) 포인트 교환
@@ -54,8 +63,8 @@ const j = (r) => r.json();
   console.log("7. 포인트 교환: +" + ex.points_added + "P");
 
   // 8) 합배송 신청
-  const p2 = await buy(1, 5000, T);
-  const p3 = await buy(1, 5000, T);
+  const p2 = await buy(P5, 5000, T);
+  const p3 = await buy(P5, 5000, T);
   const sh = await post("/shipments", { card_ids: [p2.result.result.card_id, p3.result.result.card_id], address: "서울 강남구 테스트로 1" }, T);
   console.log("8. 합배송:", sh.shipment_id ? `신청 OK (배송비 ${sh.fee}원)` : "FAIL");
 
@@ -73,7 +82,7 @@ const j = (r) => r.json();
   // 11) 미성년자(2011년생) 일 한도 10만원 — 5천원 팩 반복 구매
   let blocked = null, count = 0;
   for (let i = 0; i < 30; i++) {
-    const r = await buy(1, 5000, T);
+    const r = await buy(P5, 5000, T);
     if (r.error === "DAILY_LIMIT_MINOR") { blocked = r; break; }
     count++;
   }
@@ -89,19 +98,34 @@ const j = (r) => r.json();
   const meA = await fetch(B + "/me", { headers: { Authorization: va.token } }).then(j);
   console.log("12. 성인 한도:", meA.limit.daily_limit === null ? "무제한 OK" : "FAIL");
 
-  // 13) GUARANTEED 마일스톤 — 50번째 개봉자에게 보장 지급
-  let bonus = null;
-  for (let i = 0; i < 60; i++) {
-    const r = await buy(1, 5000, va.token);
+  // 13) GUARANTEED + LAST ONE — 4구짜리 전용 팩을 만들어 끝까지 소진시킨다.
+  //     실제 카탈로그는 첫 보장이 수백 구 뒤라 무차별 구매로는 닿지 않는다.
+  const tiny = await db.insert(
+    "INSERT INTO packs (name, price, point_price, is_welcome, total_slots, image, active) VALUES ('테스트 소형팩',1000,0,0,4,'',1)");
+  await db.run("INSERT INTO hits (pack_id,name,grade,image,total_qty,remaining,point_value,cost) VALUES (?,'소형 HIT','HIT','',4,4,1000,500)", [tiny]);
+  await db.run("INSERT INTO point_pool (pack_id,name,rarity,image,weight) VALUES (?,'커먼','common','',1)", [tiny]);
+  await db.run("INSERT INTO guaranteed (pack_id,slot_no,name,image,point_value,kind) VALUES (?,2,'보장 상품','',5000,'guaranteed')", [tiny]);
+  await db.run("INSERT INTO guaranteed (pack_id,slot_no,name,image,point_value,kind) VALUES (?,4,'라스트원 상품','',99999,'last_one')", [tiny]);
+
+  const bonuses = [];
+  for (let i = 1; i <= 4; i++) {
+    const r = await buy(tiny, 1000, va.token);
     if (r.error) { console.log("13 중단:", r.error); break; }
-    if (r.result.result.bonus) { bonus = r.result.result; break; }
+    if (r.result.result.bonus) bonuses.push({ n: i, ...r.result.result.bonus });
   }
-  console.log("13. GUARANTEED:", bonus ? `OK (#${bonus.draw_no}번째 → ${bonus.bonus.name})` : "FAIL");
+  const gotG = bonuses.find((b) => b.kind === "guaranteed");
+  const gotL = bonuses.find((b) => b.kind === "last_one");
+  console.log("13. GUARANTEED:", gotG && gotG.n === 2 ? `OK (#2 → ${gotG.name})` : "FAIL " + JSON.stringify(bonuses));
+  console.log("13-b. LAST ONE:", gotL && gotL.n === 4 ? `OK (마지막 4구 → ${gotL.name} ${gotL.point_value}P)` : "FAIL " + JSON.stringify(bonuses));
+  const tinyOdds = await get(`/packs/${tiny}`);
+  console.log("13-c. 라스트원 지급 표시:",
+    tinyOdds.last_one && tinyOdds.last_one.awarded && tinyOdds.guaranteed.length === 1
+      ? "OK (보장 목록과 분리됨)" : "FAIL " + JSON.stringify(tinyOdds.last_one));
 
   // 14) 링크 결제 — 입금 확인 전에는 아무것도 뽑히지 않고, 슬롯만 예약된다
-  const before = await get("/packs/1");
-  const co = await post("/checkout", { pack_id: 1, amount: 5000 }, va.token);
-  const held = await get("/packs/1");
+  const before = await get(`/packs/${P5}`);
+  const co = await post("/checkout", { pack_id: P5, amount: 5000 }, va.token);
+  const held = await get(`/packs/${P5}`);
   const st1 = await get(`/checkout/${co.uid}`, va.token);
   const okHold = !!co.uid && st1.status === "pending"
     && held.pack.sold_slots === before.pack.sold_slots        // 아직 개봉 안 됨
@@ -110,27 +134,27 @@ const j = (r) => r.json();
   console.log("14. 결제 대기:", okHold ? `OK (${co.uid} 예약, 개봉 없음)` : "FAIL " + JSON.stringify({ co, held: held.pack }));
 
   const done = await post(`/checkout/${co.uid}/confirm-dev`, {}, va.token);
-  const after = await get("/packs/1");
+  const after = await get(`/packs/${P5}`);
   console.log("15. 입금 확인 후 개봉:",
     done.result?.result?.name && after.pack.sold_slots === before.pack.sold_slots + 1
       && after.pack.reserved_slots === before.pack.reserved_slots ? "OK " + done.result.result.name : "FAIL " + JSON.stringify(done));
 
   // 16) 이중 확정 방지 — 웹훅과 관리자 승인이 겹쳐도 한 번만 확정돼야 한다
   const again = await post(`/checkout/${co.uid}/confirm-dev`, {}, va.token);
-  const after2 = await get("/packs/1");
+  const after2 = await get(`/packs/${P5}`);
   console.log("16. 이중 확정 방지:",
     again.already && after2.pack.sold_slots === after.pack.sold_slots ? "OK" : "FAIL " + JSON.stringify(again));
 
   // 17) 취소한 결제는 확정되지 않고 예약도 풀린다
-  const co2 = await post("/checkout", { pack_id: 1, amount: 5000 }, va.token);
+  const co2 = await post("/checkout", { pack_id: P5, amount: 5000 }, va.token);
   await post(`/checkout/${co2.uid}/cancel`, {}, va.token);
   const dead = await post(`/checkout/${co2.uid}/confirm-dev`, {}, va.token);
-  const after3 = await get("/packs/1");
+  const after3 = await get(`/packs/${P5}`);
   console.log("17. 취소 결제:",
     dead.error === "PAYMENT_NOT_PENDING" && after3.pack.reserved_slots === 0 ? "차단 OK" : "FAIL " + JSON.stringify(dead));
 
   // 18) 남의 결제는 조회도 확정도 못 한다
-  const co3 = await post("/checkout", { pack_id: 1, amount: 5000 }, va.token);
+  const co3 = await post("/checkout", { pack_id: P5, amount: 5000 }, va.token);
   const peek = await get(`/checkout/${co3.uid}`, T);
   const steal = await post(`/checkout/${co3.uid}/confirm-dev`, {}, T);
   await post(`/checkout/${co3.uid}/cancel`, {}, va.token);

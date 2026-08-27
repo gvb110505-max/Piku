@@ -109,6 +109,26 @@ export default function PackDetail() {
         </View>
       </Card>
 
+      {/* 라스트원 — 마지막 1구를 여는 사람 몫. 보장과 성격이 달라 따로 크게 둔다. */}
+      {o.last_one ? (
+        <Card style={{ borderColor: C.brandLine, backgroundColor: C.brandSoft }}>
+          <Row style={{ justifyContent: "space-between" }}>
+            <H2 style={{ color: C.brand }}>LAST ONE</H2>
+            <Pill text={o.last_one.awarded ? "지급 완료" : `마지막 1구 · #${o.last_one.slot_no}`}
+              color={o.last_one.awarded ? undefined : C.brand} />
+          </Row>
+          <Text style={{ ...T, color: C.text, fontSize: 16, fontWeight: "700", marginTop: 10 }}
+            numberOfLines={2}>{o.last_one.name}</Text>
+          <Text style={{ ...NUM, color: C.brand, fontWeight: "700", fontSize: 18, marginTop: 4 }}>
+            {pt(o.last_one.point_value)}
+          </Text>
+          <Sub style={{ marginTop: 10, lineHeight: 18 }}>
+            마지막 슬롯을 여는 분께 확률과 무관하게 지급됩니다.
+            {o.last_one.awarded ? "" : ` 남은 ${p.remaining_slots}구가 모두 팔리면 확정됩니다.`}
+          </Sub>
+        </Card>
+      ) : null}
+
       {o.guaranteed.length ? (
         <Card>
           <H2>GUARANTEED</H2>

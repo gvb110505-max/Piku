@@ -10,14 +10,15 @@ import { LinearGradient } from "expo-linear-gradient";
 import { C, R, T, NUM, won, packHue } from "@/lib/theme";
 import { Odds, imageUrl } from "@/lib/api";
 
-export function PackCard({ o, onPress }: { o: Odds; onPress: () => void }) {
+export function PackCard({ o, onPress, width }: { o: Odds; onPress: () => void; width?: number }) {
   const p = o.pack;
   const src = imageUrl(p.image);
   const sold = p.total_slots ? p.sold_slots / p.total_slots : 0;
   const [h1, h2] = packHue(p.id);   // 이미지가 없어도 팩마다 다른 색을 갖는다
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [st.card, pressed && { opacity: 0.75 }]}>
+    <Pressable onPress={onPress}
+      style={({ pressed }) => [st.card, width != null && { width }, pressed && { opacity: 0.75 }]}>
       <View style={st.thumb}>
         {src ? <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={140} /> : (
           <>

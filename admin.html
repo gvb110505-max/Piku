@@ -217,14 +217,23 @@ function renderDash(){
 
 function renderPacks(){
   api('/admin/overview').then(function(o){
-    var h='<div class="card"><h3>새 팩 만들기</h3><div class="row">'
+    var h='<div class="card"><h3>카탈로그 리셋</h3>'
+      +'<p class="muted" style="margin-top:6px">판매 상품을 기본 10종 + 웰컴팩으로 새로 깝니다. '
+      +'주문이 없던 팩은 삭제하고, 주문 이력이 있는 팩은 보관(숨김) 처리해 이력을 남깁니다. '
+      +'결제 대기 중인 주문이 있으면 실행되지 않습니다.</p>'
+      +'<div class="row"><button class="warn" onclick="resetCatalog()">상품 전체 새로 만들기</button></div></div>';
+
+    h+='<div class="card"><h3>새 팩 만들기</h3><div class="row">'
       +'<input id="np_name" placeholder="팩 이름">'
       +'<input id="np_price" class="sm" type="number" placeholder="가격(원)">'
       +'<input id="np_slots" class="sm" type="number" placeholder="총 슬롯">'
       +'<button onclick="createPack()">생성</button></div>'
       +'<p class="muted" style="margin-top:8px">원가율 35% 설계: 총 슬롯 ≈ HIT 원가 합 ÷ (판매가 × 0.35)</p></div>';
     o.packs.forEach(function(p){
-      h+='<div class="card"><h3>'+esc(p.name)+' <span class="pill '+(p.active?'on':'off')+'">'+(p.active?'판매중':'중단')+'</span></h3>'
+      h+='<div class="card"'+(p.archived?' style="opacity:.55"':'')+'><h3>'+esc(p.name)
+        +' <span class="pill '+(p.active?'on':'off')+'">'+(p.active?'판매중':'중단')+'</span>'
+        +(p.archived?' <span class="pill off">보관됨</span>':'')
+        +' <span class="muted" style="font-size:12px;font-weight:400">'+num(p.price)+'원 · '+num(p.total_slots)+'구</span></h3>'
         +'<div class="row">'+imgCell('pack',p.id,p.image)+'<label class="muted">팩 대표 이미지</label></div>'
         +'<div class="row"><label class="muted">총 슬롯</label>'
         +'<input class="sm" type="number" value="'+p.total_slots+'" id="slots_'+p.id+'">'
@@ -336,6 +345,14 @@ function setImage(kind, id, url){
   return api(path, { image: url }).then(function(){ renderPacks(); });
 }
 
+function resetCatalog(){
+  if(!confirm('판매 상품을 전부 새로 만듭니다.\n\n주문이 없던 팩은 삭제되고, 주문 이력이 있는 팩은 보관 처리됩니다.\n계속할까요?')) return;
+  if(!confirm('한 번 더 확인합니다. 정말 진행할까요?')) return;
+  toast('상품 새로 만드는 중...');
+  api('/admin/catalog/reset',{confirm:'RESET'})
+    .then(function(r){ toast(r.message||'완료'); renderPacks(); })
+    .catch(function(e){ toast(e.message); });
+}
 function createPack(){
   api('/admin/packs',{name:$('#np_name').value,price:+$('#np_price').value,total_slots:+$('#np_slots').value})
     .then(function(){toast('팩 생성 완료');renderPacks();}).catch(function(e){toast(e.message);});
