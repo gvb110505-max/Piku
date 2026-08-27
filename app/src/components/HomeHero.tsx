@@ -11,12 +11,12 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { C, R, T, NUM, won, packHue } from "@/lib/theme";
+import { C, R, T, NUM, won, shortWon, packHue } from "@/lib/theme";
 import { Odds, imageUrl } from "@/lib/api";
 
 const AUTO_MS = 5000;
 const PAD = 20;
-const H = 280;
+const H = 340;
 
 export function HomeHero({ packs, onOpen }: { packs: Odds[]; onOpen: (id: number) => void }) {
   const { width } = useWindowDimensions();
@@ -82,7 +82,7 @@ export function HomeHero({ packs, onOpen }: { packs: Odds[]; onOpen: (id: number
                   <LinearGradient colors={["transparent", "rgba(8,8,10,0.82)"]}
                     start={{ x: 0, y: 0.15 }} end={{ x: 0, y: 1 }} style={st.fill} />
                   <Text style={[st.ghostTier, { color: "rgba(255,255,255,0.16)" }]}>
-                    {Math.round(p.price / 1000)}K
+                    {shortWon(p.price)}
                   </Text>
                 </>
               )}
@@ -135,15 +135,15 @@ const st = StyleSheet.create({
     paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill, borderWidth: 1 },
   badgeDot: { width: 5, height: 5, borderRadius: 5 },
   badgeText: { ...T, color: C.text, fontSize: 11, fontWeight: "600", letterSpacing: 0.4 },
-  ghostTier: { ...NUM, position: "absolute", right: 18, top: 40, fontSize: 92, fontWeight: "700" },
+  ghostTier: { ...NUM, position: "absolute", right: 18, top: 46, fontSize: 116, fontWeight: "700" },
 
-  slideBody: { padding: 18 },
-  name: { ...T, color: C.text, fontSize: 24, fontWeight: "700", letterSpacing: -0.6 },
-  price: { ...NUM, color: C.text, fontSize: 17, fontWeight: "700", marginTop: 6 },
+  slideBody: { padding: 20 },
+  name: { ...T, color: C.text, fontSize: 27, fontWeight: "700", letterSpacing: -0.7 },
+  price: { ...NUM, color: C.text, fontSize: 19, fontWeight: "700", marginTop: 7 },
 
   metrics: { flexDirection: "row", alignItems: "baseline", gap: 5, marginTop: 14 },
   mLabel: { ...T, color: C.n400, fontSize: 11.5, marginRight: 2 },
-  mValue: { ...NUM, color: C.hit, fontSize: 18, fontWeight: "700" },
+  mValue: { ...NUM, color: C.hit, fontSize: 20, fontWeight: "700" },
   mOf: { ...NUM, color: C.n500, fontSize: 12.5 },
 
   counter: { position: "absolute", right: 12, bottom: 12, paddingHorizontal: 9, paddingVertical: 4,

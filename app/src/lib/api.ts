@@ -91,8 +91,11 @@ export type Hit = { id: number; name: string; image: string; total_qty: number; 
 export type Guaranteed = { id: number; slot_no: number; name: string; image: string;
   point_value: number; kind: "guaranteed" | "last_one"; awarded: boolean; next: boolean };
 // last_one = 마지막 1구를 여는 사람이 받는 상품. 보장 목록과 따로 온다.
+// 일반 카드도 개별 확률과 함께 온다 — 구성 상품 목록에 이미지로 같이 깔기 위해서다.
+export type PoolCard = { id: number; name: string; rarity: string; image: string;
+  weight: number; probability: number };
 export type Odds = { pack: Pack; hits: Hit[]; point_probability: number; point_remaining: number;
-  guaranteed: Guaranteed[]; last_one: Guaranteed | null; viewers?: number };
+  pool: PoolCard[]; guaranteed: Guaranteed[]; last_one: Guaranteed | null; viewers?: number };
 // ---------- 링크 결제 ----------
 // 앱은 결제를 직접 처리하지 않는다. 서버가 발급한 주문번호(uid)와 결제 링크를 받아
 // 링크를 열어주고, 입금이 확인될 때까지 상태만 지켜본다.

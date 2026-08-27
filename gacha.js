@@ -23,6 +23,13 @@ async function getOdds(packId) {
   const guaranteed = rows.filter((g) => g.kind !== "last_one");
   const nextG = guaranteed.find((g) => !g.awarded && g.slot_no > pack.sold_slots);
   if (nextG) nextG.next = true;
+  // 구성 상품 목록 — 일반 카드도 이미지와 개별 확률을 같이 내려준다.
+  // 일반 한 장이 나올 확률 = (HIT이 아닐 확률) × (그 카드 가중치 / 전체 가중치)
+  const pool = await db.all(
+    "SELECT id, name, rarity, image, weight FROM point_pool WHERE pack_id=? ORDER BY weight DESC, id", [packId]);
+  const totalW = pool.reduce((s, x) => s + Number(x.weight || 0), 0);
+  const pointP = remainingSlots > 0 ? (remainingSlots - hitRemaining) / remainingSlots : 0;
+
   return {
     pack: { id: pack.id, name: pack.name, price: pack.price, list_price: pack.list_price || null,
             point_price: pack.point_price,
@@ -33,6 +40,7 @@ async function getOdds(packId) {
     hits: hits.map((h) => ({ ...h, probability: remainingSlots > 0 ? h.remaining / remainingSlots : 0 })),
     point_probability: remainingSlots > 0 ? (remainingSlots - hitRemaining) / remainingSlots : 0,
     point_remaining: remainingSlots - hitRemaining,
+    pool: pool.map((x) => ({ ...x, probability: totalW > 0 ? pointP * (Number(x.weight) / totalW) : 0 })),
     guaranteed,
     last_one: lastOne,
   };

@@ -107,3 +107,10 @@ export const MONO: TextStyle = {
 export const won = (n: number | string) => Number(n || 0).toLocaleString("ko-KR") + "원";
 export const pt = (n: number | string) => Number(n || 0).toLocaleString("ko-KR") + "P";
 export const pct = (n: number) => (n * 100).toFixed(2) + "%";
+// 자리표시용 짧은 가격. 1,000원 미만은 반올림하면 500원도 "1K"가 되어버린다.
+export const shortWon = (n: number) => {
+  const v = Number(n || 0);
+  if (v < 1000) return String(v);
+  const k = v / 1000;
+  return (Number.isInteger(k) ? k : Math.round(k * 10) / 10) + "K";
+};

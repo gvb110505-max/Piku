@@ -7,7 +7,7 @@ import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { C, R, T, NUM, won, packHue } from "@/lib/theme";
+import { C, R, T, NUM, won, shortWon, packHue } from "@/lib/theme";
 import { Odds, imageUrl } from "@/lib/api";
 
 export function PackCard({ o, onPress, width }: { o: Odds; onPress: () => void; width?: number }) {
@@ -23,7 +23,7 @@ export function PackCard({ o, onPress, width }: { o: Odds; onPress: () => void; 
         {src ? <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={140} /> : (
           <>
             <LinearGradient colors={[h1, h2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.fill} />
-            <Text style={st.tier}>{Math.round(p.price / 1000)}K</Text>
+            <Text style={st.tier}>{shortWon(p.price)}</Text>
           </>
         )}
         {p.sold_out ? (

@@ -9,6 +9,7 @@ import { Image } from "expo-image";
 import { Screen, H1, H2, Sub, Card, Pill, Bar, Button, Loading, ErrorBox, Row } from "@/components/ui";
 import { Reveal } from "@/components/Reveal";
 import { CheckoutSheet } from "@/components/CheckoutSheet";
+import { PrizeGrid, Prize } from "@/components/PrizeGrid";
 import { Api, Odds, DrawResult, Checkout, ApiError, imageUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { C, R, T, NUM, won, pt, pct, packHue } from "@/lib/theme";
@@ -74,6 +75,21 @@ export default function PackDetail() {
 
   const p = o.pack;
   const nextG = o.guaranteed.find((g) => g.next);
+
+  // HIT을 앞에, 그다음 확률 높은 순. 소진된 HIT도 빼지 않고 뒤로 민다.
+  const prizes: Prize[] = ([
+    ...o.hits.map((h) => ({
+      key: "h" + h.id, name: h.name, grade: "HIT", image: h.image,
+      probability: h.probability, point_value: h.point_value,
+      remaining: h.remaining, total: h.total_qty,
+    })),
+    ...o.pool.map((c) => ({
+      key: "p" + c.id, name: c.name, grade: c.rarity, image: c.image,
+      probability: c.probability, point_value: 100,
+    })),
+  ] as Prize[]).sort((a, b) => (b.grade === "HIT" ? 1 : 0) - (a.grade === "HIT" ? 1 : 0)
+    || (b.remaining ?? 1) - (a.remaining ?? 1)
+    || b.probability - a.probability);
 
   return (
     <Screen onRefresh={load}>
@@ -173,6 +189,16 @@ export default function PackDetail() {
           ) : null}
         </Card>
       ) : null}
+
+      {/* 구성 상품 — 이 팩에서 나올 수 있는 카드 전부. 위 확률표가 숫자라면 여기는 그림이다. */}
+      <Card>
+        <Row style={{ justifyContent: "space-between" }}>
+          <H2>구성 상품</H2>
+          <Sub>{o.hits.length + o.pool.length}종</Sub>
+        </Row>
+        <Sub style={{ marginTop: 4 }}>표시된 확률은 지금 이 순간의 실제 추첨 확률입니다.</Sub>
+        <PrizeGrid prizes={prizes} />
+      </Card>
 
       {err ? <ErrorBox message={err} /> : null}
 
