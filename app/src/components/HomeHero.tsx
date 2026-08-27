@@ -16,11 +16,12 @@ import { Odds, imageUrl } from "@/lib/api";
 
 const AUTO_MS = 5000;
 const PAD = 20;
-const H = 190;
+const H = 280;
 
 export function HomeHero({ packs, onOpen }: { packs: Odds[]; onOpen: (id: number) => void }) {
   const { width } = useWindowDimensions();
-  const slideW = Math.max(240, width - PAD * 2);
+  // 배너는 화면 폭을 거의 다 쓰고, 다음 장이 살짝 걸쳐 보이게 한다
+  const slideW = Math.max(260, width - PAD * 2);
   const ref = useRef<ScrollView>(null);
   const [i, setI] = useState(0);
   // 사용자가 직접 넘긴 직후에는 자동 넘김이 끼어들지 않게 잠깐 쉰다
@@ -133,17 +134,17 @@ const st = StyleSheet.create({
   badge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start",
     paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill, borderWidth: 1 },
   badgeDot: { width: 5, height: 5, borderRadius: 5 },
-  badgeText: { ...T, color: C.text, fontSize: 10, fontWeight: "600", letterSpacing: 0.4 },
-  ghostTier: { ...NUM, position: "absolute", right: 16, top: 30, fontSize: 64, fontWeight: "700" },
+  badgeText: { ...T, color: C.text, fontSize: 11, fontWeight: "600", letterSpacing: 0.4 },
+  ghostTier: { ...NUM, position: "absolute", right: 18, top: 40, fontSize: 92, fontWeight: "700" },
 
-  slideBody: { padding: 16 },
-  name: { ...T, color: C.text, fontSize: 17, fontWeight: "600", letterSpacing: -0.4 },
-  price: { ...NUM, color: C.text, fontSize: 14, fontWeight: "600", marginTop: 4 },
+  slideBody: { padding: 18 },
+  name: { ...T, color: C.text, fontSize: 24, fontWeight: "700", letterSpacing: -0.6 },
+  price: { ...NUM, color: C.text, fontSize: 17, fontWeight: "700", marginTop: 6 },
 
-  metrics: { flexDirection: "row", alignItems: "baseline", gap: 5, marginTop: 12 },
-  mLabel: { ...T, color: C.n500, fontSize: 10.5, marginRight: 2 },
-  mValue: { ...NUM, color: C.hit, fontSize: 15, fontWeight: "700" },
-  mOf: { ...NUM, color: C.n500, fontSize: 11 },
+  metrics: { flexDirection: "row", alignItems: "baseline", gap: 5, marginTop: 14 },
+  mLabel: { ...T, color: C.n400, fontSize: 11.5, marginRight: 2 },
+  mValue: { ...NUM, color: C.hit, fontSize: 18, fontWeight: "700" },
+  mOf: { ...NUM, color: C.n500, fontSize: 12.5 },
 
   counter: { position: "absolute", right: 12, bottom: 12, paddingHorizontal: 9, paddingVertical: 4,
     borderRadius: R.pill, backgroundColor: "rgba(8,8,10,0.6)", borderWidth: 1, borderColor: C.line },

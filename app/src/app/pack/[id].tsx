@@ -5,12 +5,26 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { Image } from "expo-image";
 import { Screen, H1, H2, Sub, Card, Pill, Bar, Button, Loading, ErrorBox, Row } from "@/components/ui";
 import { Reveal } from "@/components/Reveal";
 import { CheckoutSheet } from "@/components/CheckoutSheet";
-import { Api, Odds, DrawResult, Checkout, ApiError } from "@/lib/api";
+import { Api, Odds, DrawResult, Checkout, ApiError, imageUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { C, R, T, NUM, won, pt, pct, packHue } from "@/lib/theme";
+
+// 보장·라스트원 상품 썸네일. 관리자가 이미지를 안 올렸으면 색 테두리만 남긴다.
+function PrizeThumb({ image, size, color }: { image?: string | null; size: number; color: string }) {
+  const src = imageUrl(image);
+  return (
+    <View style={{ width: size, height: size, borderRadius: 8, overflow: "hidden",
+      borderWidth: 1, borderColor: color + "55", backgroundColor: color + "14",
+      alignItems: "center", justifyContent: "center" }}>
+      {src ? <Image source={{ uri: src }} style={{ width: "100%", height: "100%" }} contentFit="cover" transition={140} />
+        : <Text style={{ ...T, color: color + "AA", fontSize: size > 50 ? 11 : 9, fontWeight: "700" }}>PRIZE</Text>}
+    </View>
+  );
+}
 
 export default function PackDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -117,11 +131,16 @@ export default function PackDetail() {
             <Pill text={o.last_one.awarded ? "지급 완료" : `마지막 1구 · #${o.last_one.slot_no}`}
               color={o.last_one.awarded ? undefined : C.brand} />
           </Row>
-          <Text style={{ ...T, color: C.text, fontSize: 16, fontWeight: "700", marginTop: 10 }}
-            numberOfLines={2}>{o.last_one.name}</Text>
-          <Text style={{ ...NUM, color: C.brand, fontWeight: "700", fontSize: 18, marginTop: 4 }}>
-            {pt(o.last_one.point_value)}
-          </Text>
+          <Row style={{ marginTop: 12, alignItems: "flex-start", gap: 12 }}>
+            <PrizeThumb image={o.last_one.image} size={64} color={C.brand} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ ...T, color: C.text, fontSize: 16, fontWeight: "700" }}
+                numberOfLines={2}>{o.last_one.name}</Text>
+              <Text style={{ ...NUM, color: C.brand, fontWeight: "700", fontSize: 18, marginTop: 4 }}>
+                {pt(o.last_one.point_value)}
+              </Text>
+            </View>
+          </Row>
           <Sub style={{ marginTop: 10, lineHeight: 18 }}>
             마지막 슬롯을 여는 분께 확률과 무관하게 지급됩니다.
             {o.last_one.awarded ? "" : ` 남은 ${p.remaining_slots}구가 모두 팔리면 확정됩니다.`}
@@ -135,11 +154,13 @@ export default function PackDetail() {
           <Sub style={{ marginTop: 4 }}>지정된 순번의 개봉자에게 확률과 무관하게 추가 지급됩니다.</Sub>
           <View style={{ marginTop: 12, gap: 8 }}>
             {o.guaranteed.map((g) => (
-              <Row key={g.id} style={{ justifyContent: "space-between" }}>
-                <Row style={{ flex: 1 }}>
-                  <Text style={{ ...NUM, color: g.awarded ? C.n600 : C.hit, fontWeight: "700", width: 46 }}>#{g.slot_no}</Text>
-                  <Text style={{ color: g.awarded ? C.n500 : C.text, flex: 1 }} numberOfLines={1}>{g.name}</Text>
-                </Row>
+              <Row key={g.id} style={{ justifyContent: "space-between", opacity: g.awarded ? 0.45 : 1 }}>
+                <PrizeThumb image={g.image} size={38} color={C.hit} />
+                <Text style={{ ...NUM, color: g.awarded ? C.n600 : C.hit, fontWeight: "700", width: 48 }}>#{g.slot_no}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ ...T, color: g.awarded ? C.n500 : C.text, fontSize: 13.5 }} numberOfLines={1}>{g.name}</Text>
+                  <Text style={{ ...NUM, color: C.n500, fontSize: 11, marginTop: 2 }}>{pt(g.point_value)}</Text>
+                </View>
                 {g.awarded ? <Pill text="지급 완료" />
                   : g.next ? <Pill text="다음 차례" color={C.hit} /> : null}
               </Row>

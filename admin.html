@@ -255,6 +255,31 @@ function renderPacks(){
         +'<input id="nh_pv_'+p.id+'" class="sm" type="number" placeholder="교환P">'
         +'<input id="nh_cost_'+p.id+'" class="sm" type="number" placeholder="원가">'
         +'<button onclick="addHit('+p.id+')">HIT 추가</button></div>'
+      // 라스트원 — 마지막 1구 상품. 성격이 달라 보장 표와 따로 둔다.
+      if(p.last_one){
+        var L = p.last_one;
+        h+='<div class="row" style="margin-top:14px"><span class="pill off">LAST ONE</span>'
+          +'<span class="muted">마지막 '+num(L.slot_no)+'구</span></div>'
+          +'<table><tr><th>이미지</th><th>상품명</th><th>교환P</th><th></th></tr>'
+          +'<tr><td>'+imgCell('g',L.id,L.image)+'</td>'
+          +'<td><input id="gn_'+L.id+'" value="'+esc(L.name)+'" style="min-width:180px"></td>'
+          +'<td><input class="sm" id="gp_'+L.id+'" type="number" value="'+esc(L.point_value)+'"> P</td>'
+          +'<td>'+(L.awarded?'<span class="muted">지급됨</span>'
+                 :'<button class="ghost" onclick="updGuar('+L.id+')">저장</button>')+'</td></tr></table>';
+      }
+      if(p.guaranteed && p.guaranteed.length){
+        h+='<table><tr><th>이미지</th><th>GUARANTEED</th><th>순번</th><th>교환P</th><th></th></tr>';
+        p.guaranteed.forEach(function(G){
+          h+='<tr><td>'+imgCell('g',G.id,G.image)+'</td>'
+            +'<td><input id="gn_'+G.id+'" value="'+esc(G.name)+'" style="min-width:160px"></td>'
+            +'<td><input class="sm" id="gs_'+G.id+'" type="number" value="'+esc(G.slot_no)+'" style="width:70px"></td>'
+            +'<td><input class="sm" id="gp_'+G.id+'" type="number" value="'+esc(G.point_value)+'"> P</td>'
+            +'<td>'+(G.awarded?'<span class="muted">지급됨</span>'
+                   :'<button class="ghost" onclick="updGuar('+G.id+')">저장</button>')+'</td></tr>';
+        });
+        h+='</table>';
+      }
+
         +'<table><tr><th>이미지</th><th>POINT 풀</th><th>등급</th><th>가중치</th><th></th></tr>';
       p.pool.forEach(function(c){
         h+='<tr><td>'+imgCell('pool',c.id,c.image)+'</td><td>'+esc(c.name)+'</td><td>'+c.rarity+'</td><td>'+c.weight+'</td>'
@@ -341,10 +366,20 @@ function clearImage(kind, id){
 function setImage(kind, id, url){
   var path = kind === 'pack' ? '/admin/packs/'+id
            : kind === 'hit'  ? '/admin/hits/'+id
+           : kind === 'g'    ? '/admin/guaranteed/'+id
            : '/admin/pool/'+id;
   return api(path, { image: url }).then(function(){ renderPacks(); });
 }
 
+// 보장·라스트원 저장. 순번 칸은 라스트원에 없으므로 있을 때만 보낸다.
+function updGuar(id){
+  var body = { name: document.getElementById('gn_'+id).value,
+               point_value: +document.getElementById('gp_'+id).value };
+  var slot = document.getElementById('gs_'+id);
+  if(slot) body.slot_no = +slot.value;
+  api('/admin/guaranteed/'+id, body)
+    .then(function(){ toast('저장됨'); renderPacks(); }).catch(function(e){ toast(e.message); });
+}
 function resetCatalog(){
   if(!confirm('판매 상품을 전부 새로 만듭니다.\n\n주문이 없던 팩은 삭제되고, 주문 이력이 있는 팩은 보관 처리됩니다.\n계속할까요?')) return;
   if(!confirm('한 번 더 확인합니다. 정말 진행할까요?')) return;

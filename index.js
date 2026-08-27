@@ -494,7 +494,7 @@ app.get("/admin/ping", (req, res) => {
 
 app.get("/admin/overview", admin, h(async (req, res) => {
   // 팩마다 쿼리를 돌리면(N+1) Neon 콜드스타트에서 Vercel 함수 타임아웃(10초)에 걸린다 → 전량 조회 후 메모리 그룹핑
-  const [sales, users, pend, packRows, hitRows, poolRows, orderCounts] = await Promise.all([
+  const [sales, users, pend, packRows, hitRows, poolRows, orderCounts, gRows] = await Promise.all([
     db.get("SELECT COALESCE(SUM(amount),0) AS s, COUNT(*) AS c FROM orders WHERE status='paid'"),
     db.get("SELECT COUNT(*) AS c FROM users"),
     db.get("SELECT COUNT(*) AS c FROM shipments WHERE status!='shipped'"),
@@ -502,12 +502,17 @@ app.get("/admin/overview", admin, h(async (req, res) => {
     db.all("SELECT * FROM hits ORDER BY id"),
     db.all("SELECT * FROM point_pool ORDER BY id"),
     db.all("SELECT pack_id, COUNT(*) AS c FROM orders GROUP BY pack_id"),
+    db.all("SELECT * FROM guaranteed ORDER BY slot_no"),
   ]);
   const by = (rows) => rows.reduce((m, r) => ((m[r.pack_id] = m[r.pack_id] || []).push(r), m), {});
-  const hitsBy = by(hitRows), poolBy = by(poolRows);
+  const hitsBy = by(hitRows), poolBy = by(poolRows), gBy = by(gRows);
   const ordBy = Object.fromEntries(orderCounts.map((r) => [r.pack_id, Number(r.c)]));
-  const packs = packRows.map((p) => ({ ...p,
-    hits: hitsBy[p.id] || [], pool: poolBy[p.id] || [], orders: ordBy[p.id] || 0 }));
+  const packs = packRows.map((p) => {
+    const gs = (gBy[p.id] || []).map((g) => ({ ...g, kind: g.kind || "guaranteed", awarded: !!g.awarded_user }));
+    return { ...p, hits: hitsBy[p.id] || [], pool: poolBy[p.id] || [], orders: ordBy[p.id] || 0,
+      guaranteed: gs.filter((g) => g.kind !== "last_one"),
+      last_one: gs.find((g) => g.kind === "last_one") || null };
+  });
   res.json({ sales_total: Number(sales.s), order_count: Number(sales.c), user_count: Number(users.c),
     pending_shipments: Number(pend.c), packs });
 }));
@@ -553,6 +558,18 @@ app.post("/admin/hits/:id", admin, h(async (req, res) => {
     const left = await db.get("SELECT COALESCE(SUM(remaining),0) AS s FROM hits WHERE pack_id=?", [hit.pack_id]);
     await db.run("UPDATE packs SET active=? WHERE id=?", [Number(left.s) > 0 ? 1 : 0, hit.pack_id]);
   }
+  res.json({ ok: true });
+}));
+
+// 보장·라스트원 수정 — 이미지 등록이 주 용도지만 상품명/교환값/순번도 함께 손볼 수 있게 한다.
+app.post("/admin/guaranteed/:id", admin, h(async (req, res) => {
+  const allowed = ["name", "image", "point_value", "slot_no"];
+  const sets = [], vals = [];
+  for (const k of allowed) if (req.body[k] != null) { sets.push(`${k}=?`); vals.push(req.body[k]); }
+  if (!sets.length) return res.status(400).json({ error: "NO_FIELDS" });
+  vals.push(Number(req.params.id));
+  const r = await db.run(`UPDATE guaranteed SET ${sets.join(",")} WHERE id=?`, vals);
+  if (!r.changes) return res.status(404).json({ error: "NOT_FOUND" });
   res.json({ ok: true });
 }));
 
