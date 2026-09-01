@@ -87,7 +87,10 @@ export type Pack = {
   image: string; total_slots: number; sold_slots: number; remaining_slots: number;
   sold_out: boolean; active: boolean; reserved_slots?: number; available_slots?: number;
 };
-export type Hit = { id: number; name: string; image: string; total_qty: number; remaining: number; point_value: number; probability: number };
+// tier: heavy = 그 팩의 간판 상품(HEAVY HITS 묶음). 확률은 화면에 쓰지 않지만
+// 값 자체는 계속 내려온다 — 잔여 수량과 남은 슬롯으로 검산할 수 있어야 하기 때문이다.
+export type Hit = { id: number; name: string; image: string; total_qty: number; remaining: number;
+  point_value: number; probability: number; tier: "heavy" | "hit" };
 export type Guaranteed = { id: number; slot_no: number; name: string; image: string;
   point_value: number; kind: "guaranteed" | "last_one"; awarded: boolean; next: boolean };
 // last_one = 마지막 1구를 여는 사람이 받는 상품. 보장 목록과 따로 온다.

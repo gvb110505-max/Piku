@@ -242,9 +242,14 @@ function renderPacks(){
         +'<div class="row"><label class="muted">결제 링크</label>'
         +'<input style="min-width:320px" id="payurl_'+p.id+'" placeholder="비우면 결제 대사 탭의 공통 설정을 씁니다" value="'+esc(p.pay_url||'')+'">'
         +'<button class="ghost" onclick="updPack('+p.id+',{pay_url:document.getElementById(\'payurl_'+p.id+'\').value})">저장</button></div>'
-        +'<table><tr><th>이미지</th><th>HIT</th><th>잔여</th><th>총량</th><th>교환P</th><th></th></tr>';
+        +'<table><tr><th>이미지</th><th>HIT</th><th>묶음</th><th>잔여</th><th>총량</th><th>교환P</th><th></th></tr>';
       p.hits.forEach(function(x){
-        h+='<tr><td>'+imgCell('hit',x.id,x.image)+'</td><td>'+esc(x.name)+'</td>'
+        var heavy = (x.tier||'hit') === 'heavy';
+        h+='<tr><td>'+imgCell('hit',x.id,x.image)+'</td>'
+          +'<td><input id="hn_'+x.id+'" value="'+esc(x.name)+'" style="min-width:150px"></td>'
+          +'<td><button class="ghost" style="padding:4px 9px;font-size:11px" '
+          +'onclick="updHit('+x.id+',{tier:\''+(heavy?'hit':'heavy')+'\'})">'
+          +(heavy?'HEAVY':'HITS')+'</button></td>'
           +'<td><input class="sm" type="number" value="'+x.remaining+'" id="hr_'+x.id+'"></td>'
           +'<td><input class="sm" type="number" value="'+x.total_qty+'" id="ht_'+x.id+'"></td>'
           +'<td><input class="sm" type="number" value="'+x.point_value+'" id="hp_'+x.id+'"> P</td>'
@@ -393,10 +398,15 @@ function createPack(){
     .then(function(){toast('팩 생성 완료');renderPacks();}).catch(function(e){toast(e.message);});
 }
 function updPack(id,body){ api('/admin/packs/'+id,body).then(function(){toast('저장됨');renderPacks();}).catch(function(e){toast(e.message);}); }
-function updHit(id){
-  api('/admin/hits/'+id,{remaining:+document.getElementById('hr_'+id).value,
-    total_qty:+document.getElementById('ht_'+id).value,point_value:+document.getElementById('hp_'+id).value})
-    .then(function(){toast('HIT 저장됨');renderPacks();}).catch(function(e){toast(e.message);});
+// patch를 주면 그것만 바꾼다 (예: 묶음 토글). 없으면 입력칸 값을 통째로 저장한다.
+function updHit(id, patch){
+  var body = patch || { name: document.getElementById('hn_'+id).value,
+    remaining:+document.getElementById('hr_'+id).value,
+    total_qty:+document.getElementById('ht_'+id).value,
+    point_value:+document.getElementById('hp_'+id).value };
+  api('/admin/hits/'+id, body)
+    .then(function(){toast(patch?('묶음 → '+(patch.tier==='heavy'?'HEAVY HITS':'HITS')):'HIT 저장됨');renderPacks();})
+    .catch(function(e){toast(e.message);});
 }
 function addHit(pid){
   api('/admin/packs/'+pid+'/hits',{name:document.getElementById('nh_name_'+pid).value,

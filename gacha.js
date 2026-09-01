@@ -7,7 +7,9 @@ async function getOdds(packId) {
   const pack = await db.get("SELECT * FROM packs WHERE id=?", [packId]);
   if (!pack) return null;
   const hits = await db.all(
-    "SELECT id, name, image, total_qty, remaining, point_value FROM hits WHERE pack_id=? ORDER BY id", [packId]);
+    `SELECT id, name, image, total_qty, remaining, point_value, COALESCE(tier,'hit') AS tier
+     FROM hits WHERE pack_id=? ORDER BY (CASE WHEN COALESCE(tier,'hit')='heavy' THEN 0 ELSE 1 END), point_value DESC, id`,
+    [packId]);
   const remainingSlots = pack.total_slots - pack.sold_slots;
   const hitRemaining = hits.reduce((s, h) => s + h.remaining, 0);
   const soldOut = hitRemaining === 0 || remainingSlots <= 0;

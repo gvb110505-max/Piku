@@ -155,10 +155,12 @@ async function insertCatalog(c) {
       "INSERT INTO packs (name, price, point_price, is_welcome, total_slots, image, list_price) VALUES (?,?,0,0,?,'',?)",
       [p.name, p.price, p.slots, p.list_price || null]);
     ids.push(pid);
-    for (const [name, qty, pv, cost] of p.hits) {
+    // hits 배열 앞 2줄이 그 팩의 간판 상품 → HEAVY HITS로 묶는다
+      for (let i = 0; i < p.hits.length; i++) {
+      const [name, qty, pv, cost] = p.hits[i];
       await c.run(
-        "INSERT INTO hits (pack_id, name, grade, image, total_qty, remaining, point_value, cost) VALUES (?,?,'HIT','',?,?,?,?)",
-        [pid, name, qty, qty, pv, cost]);
+        "INSERT INTO hits (pack_id, name, grade, image, total_qty, remaining, point_value, cost, tier) VALUES (?,?,'HIT','',?,?,?,?,?)",
+        [pid, name, qty, qty, pv, cost, i < 2 ? "heavy" : "hit"]);
     }
     // 이름에 "(보장 N)"을 붙이면 목록에서 잘려서 상품명이 안 보인다 — 순번은 slot_no가 말해준다
     const [gName, gValue] = p.guaranteed;

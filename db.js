@@ -134,7 +134,8 @@ CREATE TABLE IF NOT EXISTS packs (
 CREATE TABLE IF NOT EXISTS hits (
   id ${ID}, pack_id INTEGER NOT NULL, name TEXT NOT NULL, grade TEXT NOT NULL,
   image TEXT, total_qty INTEGER NOT NULL, remaining INTEGER NOT NULL,
-  point_value INTEGER NOT NULL, cost INTEGER NOT NULL DEFAULT 0
+  point_value INTEGER NOT NULL, cost INTEGER NOT NULL DEFAULT 0,
+  tier TEXT NOT NULL DEFAULT 'hit'          -- heavy | hit (상품 구성표 묶음)
 );
 CREATE TABLE IF NOT EXISTS guaranteed (
   id ${ID}, pack_id INTEGER NOT NULL, slot_no INTEGER NOT NULL, name TEXT NOT NULL,
@@ -333,6 +334,8 @@ const ADD_COLUMNS = [
   ["guaranteed", "kind", "TEXT NOT NULL DEFAULT 'guaranteed'"],
   // 카탈로그 리셋으로 물러난 옛 팩. 주문 이력이 있어 지우지 않고 숨긴다.
   ["packs", "archived", "INTEGER NOT NULL DEFAULT 0"],
+  // HEAVY HITS / HITS 구분. 상품 구성표를 등급대로 묶어 보여주는 데 쓴다.
+  ["hits", "tier", "TEXT NOT NULL DEFAULT 'hit'"],
 ];
 async function migrate() {
   for (const [table, col, type] of ADD_COLUMNS) {

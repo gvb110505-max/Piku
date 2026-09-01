@@ -9,10 +9,10 @@ import { Image } from "expo-image";
 import { Screen, H1, H2, Sub, Card, Pill, Bar, Button, Loading, ErrorBox, Row } from "@/components/ui";
 import { Reveal } from "@/components/Reveal";
 import { CheckoutSheet } from "@/components/CheckoutSheet";
-import { PrizeGrid, Prize } from "@/components/PrizeGrid";
+import { PrizeList, PrizeSection } from "@/components/PrizeList";
 import { Api, Odds, DrawResult, Checkout, ApiError, imageUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { C, R, T, NUM, won, pt, pct, packHue } from "@/lib/theme";
+import { C, R, T, NUM, won, pt, packHue } from "@/lib/theme";
 
 // 보장·라스트원 상품 썸네일. 관리자가 이미지를 안 올렸으면 색 테두리만 남긴다.
 function PrizeThumb({ image, size, color }: { image?: string | null; size: number; color: string }) {
@@ -76,20 +76,27 @@ export default function PackDetail() {
   const p = o.pack;
   const nextG = o.guaranteed.find((g) => g.next);
 
-  // HIT을 앞에, 그다음 확률 높은 순. 소진된 HIT도 빼지 않고 뒤로 민다.
-  const prizes: Prize[] = ([
-    ...o.hits.map((h) => ({
-      key: "h" + h.id, name: h.name, grade: "HIT", image: h.image,
-      probability: h.probability, point_value: h.point_value,
-      remaining: h.remaining, total: h.total_qty,
-    })),
-    ...o.pool.map((c) => ({
-      key: "p" + c.id, name: c.name, grade: c.rarity, image: c.image,
-      probability: c.probability, point_value: 100,
-    })),
-  ] as Prize[]).sort((a, b) => (b.grade === "HIT" ? 1 : 0) - (a.grade === "HIT" ? 1 : 0)
-    || (b.remaining ?? 1) - (a.remaining ?? 1)
-    || b.probability - a.probability);
+  // 상품 구성표 — 확률 대신 남은 재고 수량만 보여준다.
+  // HIT 잔여 합 + N LINE = 남은 슬롯이라, 보는 사람이 직접 계산할 수 있다.
+  const heavy = o.hits.filter((h) => h.tier === "heavy");
+  const plain = o.hits.filter((h) => h.tier !== "heavy");
+  const hitLeft = o.hits.reduce((s, h) => s + h.remaining, 0);
+  const toItem = (h: (typeof o.hits)[number], color: string) => ({
+    key: "h" + h.id, name: h.name, qty: h.remaining, image: h.image,
+    color, gone: h.remaining <= 0,
+  });
+  const sections: PrizeSection[] = [
+    { title: "HEAVY HITS", color: C.brand, items: heavy.map((h) => toItem(h, C.brand)) },
+    { title: "HITS", color: C.hit, items: plain.map((h) => toItem(h, C.hit)) },
+    {
+      title: "N LINE", color: C.common,
+      // 꽝은 종류를 나열하지 않고 한 칸으로 묶는다 — 몇 장 남았는지가 전부다
+      items: o.point_remaining > 0 ? [{
+        key: "n", name: "일반 카드 (C / U / R)", qty: o.point_remaining,
+        image: o.pool[0]?.image ?? null, color: C.common, label: "C/U/R",
+      }] : [],
+    },
+  ];
 
   return (
     <Screen onRefresh={load}>
@@ -103,40 +110,6 @@ export default function PackDetail() {
         <H2>개봉 현황</H2>
         <Bar value={p.total_slots ? p.sold_slots / p.total_slots : 0} colors={packHue(p.id) as [string, string]} />
         <Sub style={{ marginTop: 6 }}>{p.sold_slots} / {p.total_slots} 개봉 · 남은 슬롯 {p.remaining_slots}</Sub>
-      </Card>
-
-      <Card>
-        <H2>확률 · 잔여 수량</H2>
-        <Sub style={{ marginTop: 4 }}>남은 수량 ÷ 남은 슬롯 = 실제 추첨 확률</Sub>
-        <View style={{ marginTop: 12, gap: 10 }}>
-          {/* 다 나간 HIT은 목록에 남기되 눌러둔다 — 지운 것처럼 보이면 확률표를 믿기 어렵다 */}
-          {o.hits.map((h) => {
-            const gone = h.remaining <= 0;
-            return (
-              <View key={h.id} style={gone ? { opacity: 0.42 } : undefined}>
-                <Row style={{ justifyContent: "space-between" }}>
-                  <View style={{ width: 4, height: 14, borderRadius: 4, backgroundColor: gone ? C.n600 : C.hit }} />
-                  <Text style={{ ...T, color: gone ? C.n400 : C.text, fontSize: 14, fontWeight: "500", flex: 1 }}
-                    numberOfLines={1}>{h.name}</Text>
-                  <Text style={{ ...NUM, color: gone ? C.n500 : C.hit, fontSize: 15, fontWeight: "700" }}>
-                    {gone ? "소진" : pct(h.probability)}
-                  </Text>
-                </Row>
-                <Row style={{ justifyContent: "space-between", marginTop: 3, paddingLeft: 12 }}>
-                  <Sub>교환 {pt(h.point_value)}</Sub>
-                  <Sub>{h.remaining} / {h.total_qty}개 남음</Sub>
-                </Row>
-              </View>
-            );
-          })}
-          <View style={{ borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 }}>
-            <Row style={{ justifyContent: "space-between" }}>
-              <View style={{ width: 4, height: 14, borderRadius: 4, backgroundColor: C.common }} />
-              <Text style={{ ...T, color: C.n400, fontSize: 14, flex: 1 }}>일반 카드</Text>
-              <Text style={{ ...NUM, color: C.n400, fontSize: 14, fontWeight: "600" }}>{pct(o.point_probability)}</Text>
-            </Row>
-          </View>
-        </View>
       </Card>
 
       {/* 라스트원 — 마지막 1구를 여는 사람 몫. 보장과 성격이 달라 따로 크게 둔다. */}
@@ -190,14 +163,19 @@ export default function PackDetail() {
         </Card>
       ) : null}
 
-      {/* 구성 상품 — 이 팩에서 나올 수 있는 카드 전부. 위 확률표가 숫자라면 여기는 그림이다. */}
+      {/* 상품 구성 — 확률(%)은 쓰지 않는다. 남은 재고 수량만 두고 계산은 보는 사람 몫으로. */}
       <Card>
-        <Row style={{ justifyContent: "space-between" }}>
-          <H2>구성 상품</H2>
-          <Sub>{o.hits.length + o.pool.length}종</Sub>
+        <Row style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+          <H2>상품 구성</H2>
+          <Text style={{ ...NUM, color: C.n400, fontSize: 12 }}>
+            남은 슬롯 {p.remaining_slots.toLocaleString("ko-KR")}
+          </Text>
         </Row>
-        <Sub style={{ marginTop: 4 }}>표시된 확률은 지금 이 순간의 실제 추첨 확률입니다.</Sub>
-        <PrizeGrid prizes={prizes} />
+        <Sub style={{ marginTop: 6, lineHeight: 18 }}>
+          숫자는 지금 남아 있는 재고 수량입니다. HIT {hitLeft.toLocaleString("ko-KR")}장 +
+          일반 {o.point_remaining.toLocaleString("ko-KR")}장 = 남은 슬롯 {p.remaining_slots.toLocaleString("ko-KR")}.
+        </Sub>
+        <PrizeList sections={sections} />
       </Card>
 
       {err ? <ErrorBox message={err} /> : null}

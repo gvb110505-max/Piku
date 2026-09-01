@@ -544,12 +544,15 @@ app.post("/admin/packs/:id/hits", admin, h(async (req, res) => {
   res.json({ id });
 }));
 app.post("/admin/hits/:id", admin, h(async (req, res) => {
-  const { point_value, remaining, total_qty, image } = req.body;
+  const { point_value, remaining, total_qty, image, name, tier } = req.body;
   const sets = [], vals = [];
   if (point_value != null) { sets.push("point_value=?"); vals.push(point_value); }
   if (remaining != null) { sets.push("remaining=?"); vals.push(remaining); }
   if (total_qty != null) { sets.push("total_qty=?"); vals.push(total_qty); }
   if (image != null) { sets.push("image=?"); vals.push(image); }
+  if (name != null) { sets.push("name=?"); vals.push(name); }
+  // heavy = 상품 구성표에서 HEAVY HITS 묶음으로 올린다
+  if (tier != null) { sets.push("tier=?"); vals.push(tier === "heavy" ? "heavy" : "hit"); }
   if (!sets.length) return res.status(400).json({ error: "NO_FIELDS" });
   vals.push(Number(req.params.id));
   await db.run(`UPDATE hits SET ${sets.join(",")} WHERE id=?`, vals);
