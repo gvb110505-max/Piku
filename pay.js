@@ -47,20 +47,41 @@ function buildPayUrl(template, { uid, amount, title }) {
 const fulfillers = new Map();
 function register(kind, fn) { fulfillers.set(kind, fn); }
 
-// ---- 만료 청소 ----
-// 크론이 없는 환경(서버리스)이라 조회/생성 때마다 게으르게 쓸어담는다.
-async function sweepExpired() {
+// ---- 만료 처리 ----
+// 정답은 "아직 살아 있는 예약"의 정의 한 줄이다. 청소(UPDATE)가 늦어도
+// 이 조건으로 세면 결과가 틀리지 않는다 — 청소는 순전히 정리용이다.
+const ALIVE = "status='pending' AND (expires_at IS NULL OR expires_at > ?)";
+
+// 크론이 없는 환경(서버리스)이라 게으르게 쓸어담되, 요청마다 쓰기를 날리지 않도록
+// 인스턴스별로 간격을 둔다. 홈 한 번 열 때 UPDATE가 팩 수만큼 나가던 걸 막는다.
+const SWEEP_EVERY_MS = 60 * 1000;
+let lastSweep = 0;
+async function sweepExpired({ force = false } = {}) {
+  if (!force && Date.now() - lastSweep < SWEEP_EVERY_MS) return;
+  lastSweep = Date.now();
+  const now = db.NOW();
   await db.run(
-    "UPDATE payment_links SET status='expired', closed_at=? WHERE status='pending' AND expires_at IS NOT NULL AND expires_at < ?",
-    [db.NOW(), db.NOW()]);
+    "UPDATE payment_links SET status='expired', closed_at=? WHERE status='pending' AND expires_at IS NOT NULL AND expires_at <= ?",
+    [now, now]);
 }
 
 // 팩 슬롯 예약 수 — 아직 결제 대기 중이라 남에게 팔면 안 되는 몫.
 async function reservedSlots(packId) {
-  await sweepExpired();
   const r = await db.get(
-    "SELECT COUNT(*) AS c FROM payment_links WHERE kind='pack' AND ref_id=? AND status='pending'", [packId]);
+    `SELECT COUNT(*) AS c FROM payment_links WHERE kind='pack' AND ref_id=? AND ${ALIVE}`,
+    [packId, db.NOW()]);
   return Number(r.c || 0);
+}
+
+// 여러 팩을 한 번에. 홈 화면처럼 팩이 여러 개일 때 쿼리가 팩 수만큼 늘지 않게 한다.
+async function reservedSlotsMany(packIds) {
+  const out = new Map(packIds.map((id) => [Number(id), 0]));
+  if (!packIds.length) return out;
+  const rows = await db.all(
+    `SELECT ref_id, COUNT(*) AS c FROM payment_links
+     WHERE kind='pack' AND ${ALIVE} GROUP BY ref_id`, [db.NOW()]);
+  for (const r of rows) if (out.has(Number(r.ref_id))) out.set(Number(r.ref_id), Number(r.c));
+  return out;
 }
 
 // 한 사람이 결제창만 열어두고 재고를 묶어두지 못하게 한다.
@@ -69,7 +90,7 @@ const MAX_OPEN_PER_USER = 3;
 async function createCheckout({ kind, userId, refId, amount, title, payUrlOverride, payload }) {
   await sweepExpired();
   const open = await db.get(
-    "SELECT COUNT(*) AS c FROM payment_links WHERE user_id=? AND status='pending'", [userId]);
+    `SELECT COUNT(*) AS c FROM payment_links WHERE user_id=? AND ${ALIVE}`, [userId, db.NOW()]);
   if (Number(open.c) >= MAX_OPEN_PER_USER) {
     const e = new Error("TOO_MANY_PENDING_PAYMENTS");
     e.status = 429;
@@ -79,7 +100,8 @@ async function createCheckout({ kind, userId, refId, amount, title, payUrlOverri
 
   const st = await getPaySettings();
   const uid = (kind === "market" ? "MK" : "PK") + code(6);
-  const expires = new Date(Date.now() + st.hold_minutes * 60 * 1000).toISOString();
+  // db.NOW()와 같은 형식으로 저장해야 한다 — 만료 판정이 문자열 비교라서.
+  const expires = db.AT(Date.now() + st.hold_minutes * 60 * 1000);
   // 팩별 링크가 등록돼 있으면 그걸 쓰고, 없으면 공통 템플릿으로 만든다.
   const payUrl = payUrlOverride || buildPayUrl(st.template, { uid, amount, title });
 
@@ -106,9 +128,14 @@ function publicView(row, st) {
   };
 }
 
+// 조회는 쓰기를 하지 않는다. 청소가 아직 안 돌았어도 만료된 건 만료로 보여준다 —
+// DB 상태와 화면이 어긋나지 않게 읽는 쪽에서 판정한다.
 async function find(uid) {
-  await sweepExpired();
-  return db.get("SELECT * FROM payment_links WHERE uid=?", [String(uid || "")]);
+  const row = await db.get("SELECT * FROM payment_links WHERE uid=?", [String(uid || "")]);
+  if (!row) return null;
+  if (row.status === "pending" && row.expires_at && row.expires_at <= db.NOW())
+    return { ...row, status: "expired" };
+  return row;
 }
 
 // ---- 입금 확인 → 확정 ----
@@ -119,7 +146,10 @@ async function settle(uid, { pgKey, payerName, by, guard } = {}) {
   if (!link) return { ok: false, error: "PAYMENT_NOT_FOUND", status: 404 };
   if (link.status === "paid")
     return { ok: true, already: true, link, result: link.result ? JSON.parse(link.result) : null };
-  if (link.status !== "pending")
+  // 만료됐어도 확정은 받는다 — 만료는 "슬롯을 더 잡아두지 않는다"는 뜻이지
+  // "들어온 돈을 무시한다"는 뜻이 아니다. 재고가 정말 없으면 아래 확정 처리기가
+  // SOLD_OUT으로 막고 환불 요청이 자동 접수된다.
+  if (link.status !== "pending" && link.status !== "expired")
     return { ok: false, error: "PAYMENT_NOT_PENDING", status: 409, state: link.status };
 
   // 확정 직전 마지막 검사(예: 미성년자 한도). 통과 못 하면 결제를 확정하지 않는다.
@@ -133,7 +163,8 @@ async function settle(uid, { pgKey, payerName, by, guard } = {}) {
 
   // 선점 — 이 UPDATE에 성공한 호출만 상품을 만든다.
   const claim = await db.run(
-    "UPDATE payment_links SET status='paid', paid_at=?, pg_key=?, payer_name=?, confirmed_by=? WHERE uid=? AND status='pending'",
+    `UPDATE payment_links SET status='paid', paid_at=?, pg_key=?, payer_name=?, confirmed_by=?
+     WHERE uid=? AND status IN ('pending','expired')`,
     [db.NOW(), pgKey || null, payerName || null, by || "admin", link.uid]);
   if (!claim.changes) {
     const again = await find(uid);
@@ -164,12 +195,13 @@ async function cancel(uid, userId) {
   if (!link) return { ok: false, error: "PAYMENT_NOT_FOUND", status: 404 };
   if (userId != null && Number(link.user_id) !== Number(userId))
     return { ok: false, error: "FORBIDDEN", status: 403 };
-  if (link.status !== "pending")
+  if (link.status !== "pending" && link.status !== "expired")
     return { ok: false, error: "PAYMENT_NOT_PENDING", status: 409, state: link.status };
-  await db.run("UPDATE payment_links SET status='cancelled', closed_at=? WHERE uid=? AND status='pending'",
+  await db.run(
+    `UPDATE payment_links SET status='cancelled', closed_at=? WHERE uid=? AND status IN ('pending','expired')`,
     [db.NOW(), uid]);
   return { ok: true };
 }
 
 module.exports = { getPaySettings, buildPayUrl, register, createCheckout, find, publicView,
-  settle, cancel, sweepExpired, reservedSlots, code };
+  settle, cancel, sweepExpired, reservedSlots, reservedSlotsMany, code };

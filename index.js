@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const db = require("./db");
-const { getOdds, draw } = require("./gacha");
+const { getOdds, getOddsMany, draw } = require("./gacha");
 const pay = require("./pay");
 const catalog = require("./catalog");
 
@@ -246,7 +246,7 @@ function trackViewer(packId, key) {
 app.get("/packs", h(async (req, res) => {
   // archived = 카탈로그 리셋으로 물러난 옛 팩. 주문 이력 때문에 지우지 않고 숨긴다.
   const ids = await db.all("SELECT id FROM packs WHERE COALESCE(archived,0)=0 ORDER BY price DESC, id");
-  res.json(await Promise.all(ids.map((p) => getOdds(p.id))));
+  res.json(await getOddsMany(ids.map((p) => p.id)));
 }));
 
 // 실시간 HIT 당첨 피드 — 홈 상단 티커용. 닉네임은 마스킹해서 내려준다.

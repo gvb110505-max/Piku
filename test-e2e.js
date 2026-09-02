@@ -161,6 +161,37 @@ const j = (r) => r.json();
   console.log("18. 타인 결제 접근:",
     peek.error === "PAYMENT_NOT_FOUND" && steal.error === "PAYMENT_NOT_FOUND" ? "차단 OK" : "FAIL");
 
+  // 19) 결제 만료 — 예전에 expires_at을 ISO("...T...Z")로 저장해서 db.NOW()와
+  //     문자열 비교가 항상 false가 됐고, 버려진 결제가 슬롯을 영원히 붙잡았다.
+  const before19 = await get(`/packs/${P5}`);
+  const coE = await post("/checkout", { pack_id: P5, amount: 5000 }, va.token);
+  const held19 = await get(`/packs/${P5}`);
+  console.log("19. 만료 전 예약:", held19.pack.reserved_slots === before19.pack.reserved_slots + 1
+    ? "OK (1구 잡힘)" : "FAIL " + held19.pack.reserved_slots);
+
+  // 만료 시각을 과거로 돌린다 — 20분을 기다릴 수는 없으니
+  await db.run("UPDATE payment_links SET expires_at=? WHERE uid=?",
+    [db.AT(Date.now() - 60 * 1000), coE.uid]);
+  const afterExp = await get(`/packs/${P5}`);
+  console.log("19-b. 만료되면 예약 해제:",
+    afterExp.pack.reserved_slots === before19.pack.reserved_slots ? "OK" : "FAIL " + afterExp.pack.reserved_slots);
+  const st19 = await get(`/checkout/${coE.uid}`, va.token);
+  console.log("19-c. 조회 시 만료로 보임:", st19.status === "expired" ? "OK" : "FAIL " + st19.status);
+
+  // 20) 만료됐어도 실제로 입금된 건은 확정돼야 한다 — 돈은 이미 움직였다
+  const late = await fetch(B + `/admin/payments/${coE.uid}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-token": "dev-admin" },
+    body: JSON.stringify({ payer_name: "늦은입금" }),
+  }).then(j);
+  console.log("20. 만료 후 입금 확인:",
+    late.result?.result?.name ? "OK 개봉됨 " + late.result.result.name : "FAIL " + JSON.stringify(late));
+
+  // 21) 저장 형식이 섞이지 않는지 — 이게 어긋나면 위 판정이 통째로 무너진다
+  const row = await db.get("SELECT expires_at FROM payment_links WHERE uid=?", [coE.uid]);
+  console.log("21. 시각 저장 형식:",
+    /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(row.expires_at) ? "OK " + row.expires_at : "FAIL " + row.expires_at);
+
   console.log("\n== E2E 완료 ==");
   process.exit(0);
 })().catch((e) => { console.error("E2E FAIL:", e); process.exit(1); });

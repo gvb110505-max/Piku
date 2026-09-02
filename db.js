@@ -23,8 +23,18 @@ let _pg = null, _sq = null;
 function pgPool() {
   if (!_pg) {
     const { Pool } = require("pg");
-    _pg = new Pool({ connectionString: PG_URL,
-      ssl: /localhost|127\.0\.0\.1/.test(PG_URL) ? false : { rejectUnauthorized: false } });
+    // 서버리스에서는 인스턴스가 수십 개씩 뜬다. 인스턴스마다 기본값(10)만큼 붙으면
+    // Neon 직결 한도(0.25 CU에서 ~97개)를 금방 넘긴다 — 인스턴스당 소수만 쓰고,
+    // 연결이 안 나면 무한 대기 대신 빨리 실패시킨다.
+    // 운영에서는 DATABASE_URL을 pooler 엔드포인트(호스트에 "-pooler")로 두는 걸 권장.
+    _pg = new Pool({
+      connectionString: PG_URL,
+      max: Number(process.env.PG_POOL_MAX || 3),
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 8000,
+      ssl: /localhost|127\.0\.0\.1/.test(PG_URL) ? false : { rejectUnauthorized: false },
+    });
+    _pg.on("error", (e) => console.error("[pg pool]", e.message));
   }
   return _pg;
 }
@@ -110,7 +120,12 @@ async function tx(fn) {
 // pg 행 잠금 접미사 (sqlite는 BEGIN IMMEDIATE로 전체 잠금)
 const FOR_UPDATE = usePg ? " FOR UPDATE" : "";
 // created_at 저장은 양쪽 다 'YYYY-MM-DD HH:MM:SS' UTC 텍스트 → 날짜 비교는 substr로 통일
-const NOW = () => new Date().toISOString().slice(0, 19).replace("T", " ");
+// 시각은 전부 "YYYY-MM-DD HH:MM:SS" 한 가지 형식으로만 저장한다.
+// 문자열로 비교하기 때문에 형식이 섞이면 대소 비교가 조용히 틀린다 —
+// 실제로 expires_at을 toISOString()("...T...Z")으로 넣었다가 만료 판정이
+// 영원히 false가 되는 사고가 있었다.
+const AT = (ms) => new Date(ms).toISOString().slice(0, 19).replace("T", " ");
+const NOW = () => AT(Date.now());
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
 // ---- 스키마 ----
@@ -337,6 +352,14 @@ const ADD_COLUMNS = [
   // HEAVY HITS / HITS 구분. 상품 구성표를 등급대로 묶어 보여주는 데 쓴다.
   ["hits", "tier", "TEXT NOT NULL DEFAULT 'hit'"],
 ];
+// 컬럼 추가 뒤에 돌리는 데이터 보정. 전부 여러 번 돌려도 안전해야 한다.
+const FIXUPS = [
+  // expires_at을 toISOString()으로 넣던 시절의 행("2026-09-01T10:50:00.000Z")을
+  // NOW()와 같은 형식으로 맞춘다. 안 맞추면 만료 판정이 계속 false다.
+  `UPDATE payment_links SET expires_at = substr(replace(expires_at,'T',' '),1,19)
+   WHERE expires_at IS NOT NULL AND expires_at LIKE '%T%'`,
+];
+
 async function migrate() {
   for (const [table, col, type] of ADD_COLUMNS) {
     const sql = `ALTER TABLE ${table} ADD COLUMN ${col} ${type}`;
@@ -345,6 +368,15 @@ async function migrate() {
       else sqlite().exec(sql);
     } catch (e) {
       if (!/duplicate column|already exists/i.test(String(e && e.message))) throw e;
+    }
+  }
+  for (const sql of FIXUPS) {
+    try {
+      if (usePg) await pgPool().query(sql);
+      else sqlite().exec(sql);
+    } catch (e) {
+      // 아직 테이블이 없는 순간에도 기동은 막지 않는다
+      if (!/no such table|does not exist/i.test(String(e && e.message))) throw e;
     }
   }
 }
@@ -365,4 +397,4 @@ function init() {
   return _ready;
 }
 
-module.exports = { ...root, tx, init, FOR_UPDATE, NOW, TODAY, usePg, ready };
+module.exports = { ...root, tx, init, FOR_UPDATE, NOW, AT, TODAY, usePg, ready };
