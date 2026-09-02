@@ -47,10 +47,13 @@ export default function Me() {
         </Text>
       </Card>
 
-      <Card tone={ident?.verified ? "surface" : "accent"}>
+      {/* 아직 인증을 안 한 건 오류가 아니라 남은 할 일이다 —
+          카드를 빨갛게 칠하면 뭔가 잘못된 것처럼 읽힌다. */}
+      <Card>
         <Row style={{ justifyContent: "space-between" }}>
           <H2>본인확인</H2>
-          <Pill text={ident?.verified ? "완료" : "미완료"} tone={ident?.verified ? "accent" : "danger"} />
+          <Pill text={ident?.verified ? "완료" : "미완료"}
+            color={ident?.verified ? C.up : C.hit} />
         </Row>
         {ident?.verified ? (
           <Sub style={{ marginTop: 6 }}>

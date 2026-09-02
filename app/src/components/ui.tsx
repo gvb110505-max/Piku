@@ -47,8 +47,11 @@ export function Button({ title, onPress, kind = "primary", disabled, loading, st
 }) {
   const off = disabled || loading;
   const body = loading
-    ? <ActivityIndicator color={kind === "primary" ? C.onBrand : C.n300} />
-    : <Text style={[s.btnText, kind === "ghost" && { color: C.n300 }, kind === "danger" && { color: C.danger }]}>{title}</Text>;
+    ? <ActivityIndicator color={kind === "primary" && !off ? C.onBrand : C.n300} />
+    : <Text style={[s.btnText,
+        kind === "primary" && off && { color: C.n500 },
+        kind === "ghost" && { color: C.n300 },
+        kind === "danger" && { color: C.danger }]}>{title}</Text>;
 
   // 주 버튼만 브랜드 그라디언트로 채운다 — 화면에서 "지금 누를 것"이 하나로 읽히게.
   return (
@@ -58,14 +61,17 @@ export function Button({ title, onPress, kind = "primary", disabled, loading, st
         s.btn,
         kind === "ghost" && s.btnGhost,
         kind === "danger" && s.btnDanger,
-        off && { opacity: 0.42 },
+        off && kind !== "primary" && { opacity: 0.42 },
         pressed && !off && { opacity: 0.82 },
         style,
       ]}
     >
       {kind === "primary" ? (
-        <LinearGradient colors={[C.brand, C.brand2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={s.btnFill}>{body}</LinearGradient>
+        // 못 누르는 상태에서 브랜드 그라디언트를 흐리게 깔면 진흙색이 된다 —
+        // 아예 회색 채움으로 바꿔서 "지금은 못 누른다"가 분명히 보이게 한다.
+        off ? <View style={[s.btnFill, s.btnOff]}>{body}</View>
+          : <LinearGradient colors={[C.brand, C.brand2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={s.btnFill}>{body}</LinearGradient>
       ) : body}
     </Pressable>
   );
@@ -144,7 +150,9 @@ const s = StyleSheet.create({
   h2: { ...T, color: C.text, fontSize: 15, fontWeight: "600", letterSpacing: -0.2 },
   sub: { ...T, color: C.n500, fontSize: 11.5, lineHeight: 17 },
   body: { ...T, color: C.n400, fontSize: 12.5, lineHeight: 19 },
-  label: { ...T, color: C.n600, fontSize: 10, fontWeight: "500", letterSpacing: 1.4, marginBottom: 10, textTransform: "uppercase" },
+  // 한글에는 대문자 트래킹이 맞지 않는다("세 트 ( 선 택 )"처럼 벌어진다).
+  // 섹션 라벨은 자간 없이, 크기로만 위계를 준다.
+  label: { ...T, color: C.n500, fontSize: 11.5, fontWeight: "500", marginBottom: 8 },
   card: { backgroundColor: C.surface, borderRadius: R.md, padding: 16, marginTop: 14, borderWidth: 1, borderColor: C.lineSoft },
   cardPanel: { backgroundColor: C.panel, borderRadius: R.lg, padding: 18, borderWidth: 1, borderColor: C.line },
   cardAccent: { backgroundColor: C.brandSoft, borderWidth: 1, borderColor: C.brandLine, borderRadius: R.md },
@@ -152,6 +160,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, overflow: "hidden" },
   btnFill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
     alignItems: "center", justifyContent: "center" },
+  btnOff: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
   btnGhost: { borderWidth: 1, borderColor: C.lineStrong },
   btnDanger: { borderWidth: 1, borderColor: C.dangerLine, backgroundColor: C.dangerSoft },
   btnText: { ...T, color: C.onBrand, fontWeight: "700", fontSize: 14 },

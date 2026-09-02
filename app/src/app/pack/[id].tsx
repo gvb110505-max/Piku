@@ -3,16 +3,17 @@
 // 결제는 링크 결제라 "결제 → 즉시 개봉"이 아니다.
 // 결제 링크를 발급받아 시트를 띄우고, 입금이 확인된 뒤에야 개봉 결과가 온다.
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Screen, H1, H2, Sub, Card, Pill, Bar, Button, Loading, ErrorBox, Row } from "@/components/ui";
 import { Reveal } from "@/components/Reveal";
 import { CheckoutSheet } from "@/components/CheckoutSheet";
 import { PrizeList, PrizeSection } from "@/components/PrizeList";
 import { Api, Odds, DrawResult, Checkout, ApiError, imageUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { C, R, T, NUM, won, pt, packHue } from "@/lib/theme";
+import { C, R, T, NUM, won, pt, shortWon, packHue } from "@/lib/theme";
 
 // 보장·라스트원 상품 썸네일. 관리자가 이미지를 안 올렸으면 색 테두리만 남긴다.
 function PrizeThumb({ image, size, color }: { image?: string | null; size: number; color: string }) {
@@ -75,6 +76,16 @@ export default function PackDetail() {
 
   const p = o.pack;
   const nextG = o.guaranteed.find((g) => g.next);
+  const hue = packHue(p.id) as [string, string];
+  const heroSrc = imageUrl(p.image);
+
+  // 이름이 같은 보장은 한 묶음으로 접는다 (상품 1개 + 순번 칩 N개)
+  const guarGroups = Object.values(
+    o.guaranteed.reduce((m, g) => {
+      (m[g.name] = m[g.name] || { name: g.name, image: g.image, point_value: g.point_value, slots: [] })
+        .slots.push(g);
+      return m;
+    }, {} as Record<string, { name: string; image: string; point_value: number; slots: typeof o.guaranteed }>));
 
   // 상품 구성표 — 확률 대신 남은 재고 수량만 보여준다.
   // HIT 잔여 합 + N LINE = 남은 슬롯이라, 보는 사람이 직접 계산할 수 있다.
@@ -100,16 +111,43 @@ export default function PackDetail() {
 
   return (
     <Screen onRefresh={load}>
-      <Row style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
-        <H1>{p.name}</H1>
-        {p.sold_out ? <Pill text="SOLD OUT" tone="danger" /> : <Pill text={won(p.price)} color={packHue(p.id)[0]} />}
-      </Row>
-      {o.viewers ? <Sub style={{ marginTop: 6 }}>{o.viewers}명이 함께 보고 있어요</Sub> : null}
+      {/* 히어로 — 홈 배너와 같은 색을 쓴다. 같은 팩이 화면마다 다른 색이면 정체성이 깨진다. */}
+      <View style={st.hero}>
+        {heroSrc ? (
+          <>
+            <Image source={{ uri: heroSrc }} style={st.heroFill} contentFit="cover" transition={180} />
+            <LinearGradient colors={["transparent", "rgba(8,8,10,0.85)"]}
+              start={{ x: 0, y: 0.2 }} end={{ x: 0, y: 1 }} style={st.heroFill} />
+          </>
+        ) : (
+          <>
+            <LinearGradient colors={hue} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.heroFill} />
+            <LinearGradient colors={["transparent", "rgba(8,8,10,0.82)"]}
+              start={{ x: 0, y: 0.2 }} end={{ x: 0, y: 1 }} style={st.heroFill} />
+            <Text style={st.heroTier}>{shortWon(p.price)}</Text>
+          </>
+        )}
+        <View style={st.heroBody}>
+          <Row style={{ gap: 6 }}>
+            {p.sold_out ? <Pill text="SOLD OUT" tone="danger" />
+              : <Pill text="판매 중" color={C.up} />}
+            {o.viewers && o.viewers > 1 ? <Pill text={`${o.viewers}명이 보는 중`} /> : null}
+          </Row>
+          <Text style={st.heroName} numberOfLines={2}>{p.name}</Text>
+          <Text style={st.heroPrice}>{won(p.price)}</Text>
+        </View>
+      </View>
 
       <Card>
-        <H2>개봉 현황</H2>
-        <Bar value={p.total_slots ? p.sold_slots / p.total_slots : 0} colors={packHue(p.id) as [string, string]} />
-        <Sub style={{ marginTop: 6 }}>{p.sold_slots} / {p.total_slots} 개봉 · 남은 슬롯 {p.remaining_slots}</Sub>
+        <Row style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+          <H2>개봉 현황</H2>
+          <Text style={st.openNum}>
+            <Text style={{ color: C.text, fontWeight: "700" }}>{p.sold_slots.toLocaleString("ko-KR")}</Text>
+            {" / "}{p.total_slots.toLocaleString("ko-KR")}
+          </Text>
+        </Row>
+        <Bar value={p.total_slots ? p.sold_slots / p.total_slots : 0} colors={hue} />
+        <Sub style={{ marginTop: 8 }}>남은 슬롯 {p.remaining_slots.toLocaleString("ko-KR")}구</Sub>
       </Card>
 
       {/* 라스트원 — 마지막 1구를 여는 사람 몫. 보장과 성격이 달라 따로 크게 둔다. */}
@@ -139,25 +177,37 @@ export default function PackDetail() {
 
       {o.guaranteed.length ? (
         <Card>
-          <H2>GUARANTEED</H2>
+          <Row style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+            <H2>GUARANTEED</H2>
+            <Sub>{o.guaranteed.filter((g) => !g.awarded).length} / {o.guaranteed.length} 남음</Sub>
+          </Row>
           <Sub style={{ marginTop: 4 }}>지정된 순번의 개봉자에게 확률과 무관하게 추가 지급됩니다.</Sub>
-          <View style={{ marginTop: 12, gap: 8 }}>
-            {o.guaranteed.map((g) => (
-              <Row key={g.id} style={{ justifyContent: "space-between", opacity: g.awarded ? 0.45 : 1 }}>
-                <PrizeThumb image={g.image} size={38} color={C.hit} />
-                <Text style={{ ...NUM, color: g.awarded ? C.n600 : C.hit, fontWeight: "700", width: 48 }}>#{g.slot_no}</Text>
+
+          {/* 같은 상품이 순번만 달리해 반복되는 경우가 대부분이라, 상품은 한 번만 보여주고
+              순번은 칩으로 늘어놓는다. 10줄 반복은 읽히지 않는다. */}
+          {guarGroups.map((g) => (
+            <View key={g.name} style={st.guarGroup}>
+              <Row style={{ alignItems: "flex-start", gap: 12 }}>
+                <PrizeThumb image={g.image} size={52} color={C.hit} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ ...T, color: g.awarded ? C.n500 : C.text, fontSize: 13.5 }} numberOfLines={1}>{g.name}</Text>
-                  <Text style={{ ...NUM, color: C.n500, fontSize: 11, marginTop: 2 }}>{pt(g.point_value)}</Text>
+                  <Text style={st.guarName} numberOfLines={2}>{g.name}</Text>
+                  <Text style={st.guarValue}>{pt(g.point_value)} · {g.slots.length}회</Text>
                 </View>
-                {g.awarded ? <Pill text="지급 완료" />
-                  : g.next ? <Pill text="다음 차례" color={C.hit} /> : null}
               </Row>
-            ))}
-          </View>
+              <View style={st.slotWrap}>
+                {g.slots.map((x) => (
+                  <View key={x.id} style={[st.slot, x.next && st.slotNext, x.awarded && st.slotDone]}>
+                    <Text style={[st.slotText, x.next && { color: C.onBrand },
+                      x.awarded && { color: C.n600 }]}>#{x.slot_no}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))}
+
           {nextG ? (
-            <Sub style={{ marginTop: 10 }}>
-              다음 보장까지 {nextG.slot_no - p.sold_slots}번 남았어요.
+            <Sub style={{ marginTop: 12 }}>
+              다음 보장 #{nextG.slot_no}까지 {nextG.slot_no - p.sold_slots}번 남았어요.
             </Sub>
           ) : null}
         </Card>
@@ -199,3 +249,26 @@ export default function PackDetail() {
     </Screen>
   );
 }
+
+const st = StyleSheet.create({
+  hero: { height: 210, borderRadius: R.md, overflow: "hidden", marginTop: 4,
+    backgroundColor: C.panel, justifyContent: "flex-end" },
+  heroFill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+  heroTier: { ...NUM, position: "absolute", right: 16, top: 18, fontSize: 76, fontWeight: "700",
+    color: "rgba(255,255,255,0.16)" },
+  heroBody: { padding: 16, gap: 8 },
+  heroName: { ...T, color: C.text, fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  heroPrice: { ...NUM, color: C.text, fontSize: 16, fontWeight: "700" },
+
+  openNum: { ...NUM, color: C.n500, fontSize: 13 },
+
+  guarGroup: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: C.lineSoft },
+  guarName: { ...T, color: C.text, fontSize: 14, fontWeight: "600", lineHeight: 19 },
+  guarValue: { ...NUM, color: C.hit, fontSize: 12, fontWeight: "600", marginTop: 3 },
+  slotWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
+  slot: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.sm,
+    borderWidth: 1, borderColor: C.hit + "55", backgroundColor: C.hitSoft },
+  slotNext: { backgroundColor: C.brand, borderColor: C.brand },
+  slotDone: { backgroundColor: "transparent", borderColor: C.lineSoft },
+  slotText: { ...NUM, color: C.hit, fontSize: 11.5, fontWeight: "700" },
+});

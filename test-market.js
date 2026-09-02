@@ -191,6 +191,28 @@ async function buyPack(packId, amount, H) {
   const ov = await get("/admin/market/overview");
   check("16. 마켓 대시보드 집계", ov.gmv > 0 && ov.by_status.completed === 1, ov);
 
+  // 17) 판매 사진 — 서버는 예전부터 images를 받았는데 앱이 안 보내서
+  //     마켓 전체가 사진 없는 텍스트 목록이었다. 업로드 경로를 회귀로 묶는다.
+  const png = "data:image/png;base64," +
+    Buffer.from(require("fs").readFileSync(__dirname + "/test-pixel.png")).toString("base64");
+  const up = await post("/market/images", { data: png }, seller.H);
+  check("17-a. 판매자 사진 업로드", /^\/images\/\d+$/.test(up.url || ""), up);
+
+  const withImg = await post("/market/listings",
+    { title: "사진 있는 카드", ask_price: 30000, images: [up.url] }, seller.H);
+  const listed = (await get("/market/listings")).items.find((x) => x.id === withImg.id);
+  check("17-b. 목록에 사진이 실린다", listed && listed.images[0] === up.url, listed && listed.images);
+
+  const badMime = await post("/market/images", { data: "data:text/html;base64,PHNjcmlwdD4=" }, seller.H);
+  check("17-c. 이미지 아닌 형식 거부", badMime.error === "BAD_MIME", badMime);
+
+  const noAuth = await post("/market/images", { data: png }, { "Content-Type": "application/json" });
+  check("17-d. 비로그인 업로드 차단", noAuth.error === "UNAUTHORIZED", noAuth);
+
+  const huge = "data:image/png;base64," + "A".repeat(5 * 1024 * 1024);
+  const tooBig = await post("/market/images", { data: huge }, seller.H);
+  check("17-e. 3MB 초과 거부", tooBig.error === "IMAGE_TOO_LARGE", tooBig.error);
+
   console.log(`\n== 마켓 테스트: ${pass}건 통과, ${fail}건 실패 ==`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error("테스트 중단:", e); process.exit(1); });

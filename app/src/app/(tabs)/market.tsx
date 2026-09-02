@@ -1,10 +1,12 @@
 // 마켓 탐색 — 검색 / 정렬 / 목록. Piku는 여기서 통신판매중개자다.
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import { Screen, H1, H2, Sub, Card, Button, Field, Pill, Loading, Empty, ErrorBox, Row } from "@/components/ui";
+import { Screen, H1, Sub, Field, Chip, Loading, Empty, ErrorBox, Row } from "@/components/ui";
+import { ListingCard } from "@/components/ListingCard";
+import { IconPlus } from "@/components/icons";
 import { Api, ApiError, Listing } from "@/lib/api";
-import { C, won } from "@/lib/theme";
+import { C, R, T, won } from "@/lib/theme";
 
 const SORTS = [
   { key: "", label: "최신순" },
@@ -20,6 +22,7 @@ export default function Market() {
   const [sort, setSort] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [policy, setPolicy] = useState<any>(null);
+  const shipFee = Number(policy?.shipping_fee ?? 3500);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -33,63 +36,60 @@ export default function Market() {
 
   return (
     <Screen onRefresh={load}>
-      <Row style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+      <Row style={{ justifyContent: "space-between", alignItems: "center" }}>
         <H1>마켓</H1>
-        <Pressable onPress={() => router.push("/market/sell")}>
-          <Text style={{ color: C.accent200, fontWeight: "800", fontSize: 13 }}>판매하기</Text>
+        <Pressable onPress={() => router.push("/market/sell")} style={st.sell}>
+          <IconPlus size={14} color={C.onBrand} />
+          <Text style={st.sellText}>판매하기</Text>
         </Pressable>
       </Row>
 
       <Field placeholder="카드명 · 세트 검색" value={q} onChangeText={setQ}
         returnKeyType="search" onSubmitEditing={load} />
 
-      <Row style={{ marginTop: 12, flexWrap: "wrap" }}>
-        {[{ key: "", label: "전체" }, { key: "single", label: "싱글 카드" }, { key: "box", label: "미개봉 박스" }].map((k) => (
-          <Pressable key={k.key} onPress={() => setKind(k.key)}>
-            <View style={{ borderWidth: 1, borderColor: kind === k.key ? C.accent200 : C.line,
-              borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ color: kind === k.key ? C.accent200 : C.n500, fontSize: 12, fontWeight: "700" }}>{k.label}</Text>
-            </View>
-          </Pressable>
+      <Row style={{ marginTop: 14, flexWrap: "wrap" }}>
+        {[{ key: "", label: "전체" }, { key: "single", label: "싱글" }, { key: "box", label: "미개봉 박스" }].map((k) => (
+          <Chip key={k.key} text={k.label} on={kind === k.key} onPress={() => setKind(k.key)} />
         ))}
       </Row>
-      <Row style={{ marginTop: 8, flexWrap: "wrap" }}>
-        {SORTS.map((sOpt) => (
-          <Pressable key={sOpt.key} onPress={() => setSort(sOpt.key)}>
-            <Text style={{ color: sort === sOpt.key ? C.accent200 : C.n500, fontSize: 12, fontWeight: "700", marginRight: 14 }}>
-              {sOpt.label}
-            </Text>
+
+      {/* 정렬은 목록의 성격이라 칩이 아니라 밑줄 탭으로 — 필터와 섞이지 않게 */}
+      <Row style={{ marginTop: 14, gap: 18, borderBottomWidth: 1, borderBottomColor: C.lineSoft }}>
+        {SORTS.map((o) => (
+          <Pressable key={o.key} onPress={() => setSort(o.key)} style={{ alignItems: "center" }}>
+            <Text style={[st.sort, sort === o.key && st.sortOn]}>{o.label}</Text>
+            <View style={[st.sortBar, sort === o.key && { backgroundColor: C.brand }]} />
           </Pressable>
         ))}
       </Row>
 
       {err ? <ErrorBox message={err} onRetry={load} /> : null}
       {!items && !err ? <Loading /> : null}
-      {items && !items.length ? <Empty text="등록된 상품이 없어요." /> : null}
+      {items && !items.length ? <Empty text="등록된 상품이 없어요. 첫 판매를 등록해보세요." /> : null}
 
-      {items?.map((l) => (
-        <Pressable key={l.id} onPress={() => router.push(`/market/${l.id}`)}>
-          <Card>
-            <Row style={{ justifyContent: "space-between" }}>
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <H2>{l.title}</H2>
-                <Sub style={{ marginTop: 4 }}>
-                  {[l.card_set, l.grade, l.condition].filter(Boolean).join(" · ") || "정보 없음"}
-                </Sub>
-              </View>
-              <Pill text={l.kind === "box" ? "박스" : "싱글"} />
-            </Row>
-            <Row style={{ justifyContent: "space-between", marginTop: 12 }}>
-              <Text style={{ color: C.accent200, fontWeight: "900", fontSize: 17 }}>{won(l.ask_price)}</Text>
-              <Sub>{l.seller_nickname}</Sub>
-            </Row>
-          </Card>
-        </Pressable>
-      ))}
+      {items?.length ? (
+        <View style={st.grid}>
+          {items.map((l) => (
+            <ListingCard key={l.id} item={l} shippingFee={shipFee}
+              onPress={() => router.push(`/market/${l.id}`)} />
+          ))}
+        </View>
+      ) : null}
 
       {policy ? (
-        <Sub style={{ marginTop: 24 }}>{policy.notice}</Sub>
+        <View style={st.notice}><Sub style={{ lineHeight: 18 }}>{policy.notice}</Sub></View>
       ) : null}
     </Screen>
   );
 }
+
+const st = StyleSheet.create({
+  sell: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.brand,
+    paddingHorizontal: 13, height: 34, borderRadius: R.pill },
+  sellText: { ...T, color: C.onBrand, fontSize: 12.5, fontWeight: "700" },
+  sort: { ...T, color: C.n500, fontSize: 12.5, fontWeight: "500", paddingBottom: 8 },
+  sortOn: { color: C.brand, fontWeight: "700" },
+  sortBar: { height: 2, alignSelf: "stretch", backgroundColor: "transparent", marginBottom: -1 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 18 },
+  notice: { marginTop: 28, paddingTop: 16, borderTopWidth: 1, borderTopColor: C.lineSoft },
+});

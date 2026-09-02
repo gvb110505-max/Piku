@@ -654,21 +654,42 @@ app.post("/admin/users/:id/verify", admin, h(async (req, res) => {
 const IMAGE_MIME = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
-app.post("/admin/images", admin, h(async (req, res) => {
-  const { data, label } = req.body;
-  // data:image/jpeg;base64,AAAA... 형태만 받는다
+// data:image/...;base64,... 한 장을 검사해서 저장한다. 통과하면 {id,url,bytes},
+// 아니면 {error, status, message}를 돌려준다 — 관리자용/판매자용이 같은 규칙을 쓰게.
+async function storeImage(data, label) {
   const m = /^data:([^;,]+);base64,(.+)$/s.exec(String(data || ""));
-  if (!m) return res.status(400).json({ error: "BAD_IMAGE", message: "data:image/...;base64, 형식이어야 합니다." });
+  if (!m) return { error: "BAD_IMAGE", status: 400, message: "data:image/...;base64, 형식이어야 합니다." };
   const [, mime, b64] = m;
-  if (!IMAGE_MIME[mime]) return res.status(400).json({ error: "BAD_MIME", message: "JPEG · PNG · WebP만 올릴 수 있어요." });
+  if (!IMAGE_MIME[mime]) return { error: "BAD_MIME", status: 400, message: "JPEG · PNG · WebP만 올릴 수 있어요." };
   const bytes = Buffer.byteLength(b64, "base64");
   if (bytes > MAX_IMAGE_BYTES)
-    return res.status(413).json({ error: "IMAGE_TOO_LARGE", message: `이미지가 너무 큽니다 (${Math.round(bytes / 1024)}KB). 3MB 이하로 올려주세요.` });
-
+    return { error: "IMAGE_TOO_LARGE", status: 413,
+      message: `이미지가 너무 큽니다 (${Math.round(bytes / 1024)}KB). 3MB 이하로 올려주세요.` };
   const id = await db.insert(
     "INSERT INTO images (mime, data, bytes, label, created_at) VALUES (?,?,?,?,?)",
     [mime, b64, bytes, label || null, db.NOW()]);
-  res.json({ id, url: `/images/${id}`, bytes });
+  return { id, url: `/images/${id}`, bytes };
+}
+
+app.post("/admin/images", admin, h(async (req, res) => {
+  const out = await storeImage(req.body.data, req.body.label);
+  if (out.error) return res.status(out.status).json(out);
+  res.json(out);
+}));
+
+// 판매자 사진 업로드. 이미지는 DB에 들어가므로 한 사람이 무한정 올리지 못하게 막는다.
+const USER_UPLOAD_DAILY = 40;
+app.post("/market/images", auth, h(async (req, res) => {
+  const today = await db.get(
+    "SELECT COUNT(*) AS c FROM images WHERE label=? AND substr(created_at,1,10)=?",
+    [`u${req.userId}`, db.TODAY()]);
+  if (Number(today.c) >= USER_UPLOAD_DAILY)
+    return res.status(429).json({ error: "UPLOAD_LIMIT",
+      message: `하루에 사진 ${USER_UPLOAD_DAILY}장까지 올릴 수 있어요.` });
+
+  const out = await storeImage(req.body.data, `u${req.userId}`);
+  if (out.error) return res.status(out.status).json(out);
+  res.json(out);
 }));
 
 app.get("/images/:id", h(async (req, res) => {

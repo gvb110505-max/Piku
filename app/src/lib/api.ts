@@ -71,6 +71,10 @@ const MESSAGES: Record<string, string> = {
   PICKUP_INFO_REQUIRED: "수거 주소와 연락처를 입력해주세요.",
   ADDRESS_REQUIRED: "받는 주소를 입력해주세요.",
   CARD_NOT_FOUND: "이미 처리된 카드예요.",
+  BAD_IMAGE: "이미지를 읽지 못했어요.",
+  BAD_MIME: "JPEG · PNG · WebP만 올릴 수 있어요.",
+  IMAGE_TOO_LARGE: "사진이 너무 커요. 3MB 이하로 올려주세요.",
+  UPLOAD_LIMIT: "오늘 올릴 수 있는 사진 수를 넘었어요.",
 };
 function messageOf(d: any): string | null {
   if (!d) return null;
@@ -172,6 +176,8 @@ export const Api = {
   },
   listing: (id: number) => api<{ listing: Listing; quote: Quote }>(`/market/listings/${id}`, { auth: false }),
   createListing: (b: Record<string, unknown>) => api<{ id: number; quote: Quote }>("/market/listings", { body: b }),
+  // 판매 사진 업로드. data:image/...;base64,... 한 장씩 보낸다.
+  uploadImage: (data: string) => api<{ id: number; url: string; bytes: number }>("/market/images", { body: { data } }),
   cancelListing: (id: number) => api(`/market/listings/${id}/cancel`, { body: {} }),
   quotes: (productKey: string) => api<any>(`/market/quotes?product_key=${encodeURIComponent(productKey)}`, { auth: false }),
   buy: (listing_id: number, address: string, amount: number) =>

@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { Screen, H2, Sub, Card, Button, Field, ErrorBox, Row, Pill } from "@/components/ui";
+import { Screen, H2, Sub, Card, Button, Field, Chip, ErrorBox, Row, Pill } from "@/components/ui";
+import { PhotoPicker } from "@/components/PhotoPicker";
 import { Api, ApiError } from "@/lib/api";
 import { C, won } from "@/lib/theme";
 
@@ -15,6 +16,7 @@ export default function Sell() {
   const [condition, setCondition] = useState("");
   const [price, setPrice] = useState("");
   const [desc, setDesc] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
   const [policy, setPolicy] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,6 +35,7 @@ export default function Sell() {
       const r = await Api.createListing({
         kind, title: title.trim(), card_set: cardSet.trim() || null, grade: grade.trim() || null,
         condition: condition.trim() || null, ask_price: p, description: desc.trim() || null,
+        images: photos,
       });
       router.replace(`/market/${r.id}`);
     } catch (e) { setErr(e instanceof ApiError ? e.message : "등록에 실패했어요."); }
@@ -42,19 +45,13 @@ export default function Sell() {
   return (
     <Screen>
       <Row style={{ marginTop: 4 }}>
-        {(["single", "box"] as const).map((k) => (
-          <Pressable key={k} onPress={() => setKind(k)}>
-            <View style={{ borderWidth: 1, borderColor: kind === k ? C.accent200 : C.line,
-              borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 }}>
-              <Text style={{ color: kind === k ? C.accent200 : C.n500, fontWeight: "700", fontSize: 13 }}>
-                {k === "single" ? "싱글 카드" : "미개봉 박스"}
-              </Text>
-            </View>
-          </Pressable>
-        ))}
+        <Chip text="싱글 카드" on={kind === "single"} onPress={() => setKind("single")} />
+        <Chip text="미개봉 박스" on={kind === "box"} onPress={() => setKind("box")} />
       </Row>
 
       <Card>
+        {/* 사진이 없으면 목록에서 회색 칸으로 뜬다 — 제일 먼저 받는다 */}
+        <PhotoPicker urls={photos} onChange={setPhotos} />
         <Field label="상품명" placeholder="예: 리자몽 VMAX SSR" value={title} onChangeText={setTitle} />
         <Field label="세트 (선택)" placeholder="예: 샤이니스타V" value={cardSet} onChangeText={setCardSet} />
         <Field label="등급 (선택)" placeholder="예: PSA10 / raw" value={grade} onChangeText={setGrade} />
