@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>청소로 용돈벌이 — 관리자</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#e4e7ec; --muted:#6b7280; --accent:#1f6feb; --danger:#d92d20; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; background:var(--bg); color:#111; }
+  header { background:#111827; color:#fff; padding:14px 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header input { padding:6px 10px; border-radius:6px; border:0; }
+  nav { display:flex; gap:6px; padding:12px 20px 0; flex-wrap:wrap; }
+  nav button { border:1px solid var(--line); background:#fff; padding:8px 14px; border-radius:999px; cursor:pointer; }
+  nav button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  main { padding:16px 20px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer; }
+  .btn.p { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn.d { color:var(--danger); border-color:#f3b9b4; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#eef2ff; color:#3538cd; }
+  .tag.warn { background:#fef3c2; color:#a15c07; } .tag.bad { background:#fee4e2; color:#b42318; }
+  .tag.ok { background:#dcfae6; color:#067647; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .muted { color:var(--muted); }
+  input,select { padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+</style></head>
+<body>
+<header>
+  <h1>청소로 용돈벌이 · 관리자</h1>
+  <input id="tok" placeholder="관리자 토큰" style="width:200px">
+  <button class="btn" onclick="saveTok()">적용</button>
+  <span class="muted" id="who"></span>
+</header>
+<nav>
+  <button data-t="users" class="on">회원</button>
+  <button data-t="sanctions">제재·이의신청</button>
+  <button data-t="abuse">악용 패턴</button>
+  <button data-t="reports">신고</button>
+  <button data-t="settlements">정산</button>
+  <button data-t="settings">설정</button>
+</nav>
+<main id="view"></main>
+<script>
+const API = location.origin;
+let TOK = localStorage.getItem("cleaning_admin") || "dev-admin";
+document.getElementById("tok").value = TOK;
+function saveTok(){ TOK = document.getElementById("tok").value.trim(); localStorage.setItem("cleaning_admin", TOK); render(); }
+const api = (p, body) => fetch(API + p, {
+  method: body ? "POST" : "GET",
+  headers: { "Content-Type": "application/json", "x-admin-token": TOK },
+  body: body ? JSON.stringify(body) : undefined,
+}).then(r => r.json());
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
+const won = (n) => Number(n || 0).toLocaleString() + "원";
+
+let tab = "users";
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  tab = b.dataset.t;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+
+const statusTag = (s) => s === "active" ? '<span class="tag ok">정상</span>'
+  : s === "suspended" ? '<span class="tag warn">제재중</span>' : '<span class="tag bad">탈퇴</span>';
+
+async function render() {
+  const v = document.getElementById("view");
+  v.innerHTML = '<div class="card muted">불러오는 중…</div>';
+  try {
+    if (tab === "users") return renderUsers(v);
+    if (tab === "sanctions") return renderSanctions(v);
+    if (tab === "abuse") return renderAbuse(v);
+    if (tab === "reports") return renderReports(v);
+    if (tab === "settlements") return renderSettlements(v);
+    if (tab === "settings") return renderSettings(v);
+  } catch (e) { v.innerHTML = '<div class="card">오류: ' + esc(e.message) + "</div>"; }
+}
+
+async function renderUsers(v) {
+  const q = window._q || "";
+  const rows = await api("/admin/users?q=" + encodeURIComponent(q));
+  if (rows.error) return v.innerHTML = '<div class="card">' + esc(rows.error) + " — 관리자 토큰을 확인하세요.</div>";
+  v.innerHTML = `<div class="card">
+    <div class="row"><input id="q" placeholder="이름 / 휴대폰번호" value="${esc(q)}">
+      <button class="btn p" onclick="window._q=document.getElementById('q').value;render()">검색</button></div>
+    <table><tr><th>ID</th><th>역할</th><th>이름</th><th>휴대폰</th><th>상태</th><th>평점</th><th>완료</th></tr>
+    ${rows.map(u => `<tr><td>${u.id}</td><td>${u.role === "worker" ? "작업자" : "고객"}</td>
+      <td>${esc(u.name)}</td><td>${esc(u.phone)}</td><td>${statusTag(u.status)} <span class="muted">${esc(u.status_reason || "")}</span></td>
+      <td>${u.stats ? u.stats.avg_score + " (" + u.stats.rating_count + ")" + (u.stats.is_new ? ' <span class="tag">신규</span>' : "") : "-"}</td>
+      <td>${u.stats ? u.stats.completed_count : "-"}</td></tr>`).join("")}</table></div>`;
+}
+
+async function renderSanctions(v) {
+  const rows = await api("/admin/sanctions");
+  v.innerHTML = `<div class="card">
+    <div class="row"><button class="btn p" onclick="runDue()">이의신청 기간 만료 건 탈퇴 확정</button>
+      <span class="muted">7일이 지난 탈퇴 예정 건을 일괄 확정합니다.</span></div>
+    <table><tr><th>ID</th><th>회원</th><th>유형</th><th>사유</th><th>상태</th><th>이의신청</th><th>기한</th><th></th></tr>
+    ${rows.map(s => `<tr><td>${s.id}</td><td>${s.user_id}</td>
+      <td>${s.type === "withdraw" ? '<span class="tag bad">탈퇴예정</span>' : '<span class="tag warn">경고</span>'}</td>
+      <td>${esc(s.detail)}<div class="muted">${esc(s.rule)}</div></td>
+      <td>${esc(s.status)}</td><td>${esc(s.appeal_text || "")}</td><td class="muted">${esc(s.appeal_deadline || "")}</td>
+      <td>${s.type === "withdraw" && ["open","appealed"].includes(s.status) ? `
+        <button class="btn" onclick="resolve(${s.id},'accept')">인용(제재 취소)</button>
+        <button class="btn d" onclick="resolve(${s.id},'execute')">탈퇴 확정</button>` : ""}</td></tr>`).join("")}</table></div>`;
+}
+async function resolve(id, action) {
+  const memo = prompt(action === "accept" ? "인용 사유 / 무효 처리 메모" : "확정 메모", "") ?? "";
+  let ids = [];
+  if (action === "accept") {
+    const raw = prompt("무효 처리할 평가 ID (쉼표 구분, 없으면 비워두세요)", "") || "";
+    ids = raw.split(",").map(s => Number(s.trim())).filter(Boolean);
+  }
+  await api(`/admin/sanctions/${id}/resolve`, { action, memo, void_rating_ids: ids });
+  render();
+}
+async function runDue() { const r = await api("/admin/sanctions/run-due", {}); alert(`${r.executed.length}건 확정`); render(); }
+
+async function renderAbuse(v) {
+  const rows = await api("/admin/abuse?min_ones=3");
+  v.innerHTML = `<div class="card"><p class="muted">1점 비중이 80% 이상이고 1점을 3회 이상 준 고객입니다. 반복 저평가 악용 여부를 확인하세요.</p>
+    <table><tr><th>고객 ID</th><th>평가 수</th><th>1점 수</th><th>1점 비율</th></tr>
+    ${rows.map(r => `<tr><td>${r.customer_id}</td><td>${r.total}</td><td>${r.ones}</td><td>${Math.round(r.one_ratio*100)}%</td></tr>`).join("")
+      || '<tr><td colspan="4" class="muted">해당 없음</td></tr>'}</table></div>`;
+}
+
+async function renderReports(v) {
+  const rows = await api("/admin/reports");
+  const KIND = { damage:"파손", theft:"도난", misconduct:"부적절 행위", no_show:"무단 불참", etc:"기타" };
+  v.innerHTML = `<div class="card"><table>
+    <tr><th>ID</th><th>유형</th><th>신고자</th><th>대상</th><th>거래</th><th>내용</th><th>상태</th><th></th></tr>
+    ${rows.map(r => `<tr><td>${r.id}</td><td>${KIND[r.kind] || r.kind}</td><td>${r.reporter_id}</td>
+      <td>${r.target_user_id ?? "-"}</td><td>${r.match_id ?? "-"}</td><td>${esc(r.detail)}</td>
+      <td>${esc(r.status)}<div class="muted">${esc(r.admin_memo || "")}</div></td>
+      <td>${r.status !== "resolved" ? `<button class="btn" onclick="repDo(${r.id},'reviewing')">검토중</button>
+        <button class="btn p" onclick="repDo(${r.id},'resolved')">처리완료</button>` : ""}</td></tr>`).join("")}</table></div>`;
+}
+async function repDo(id, status) { await api(`/admin/reports/${id}/resolve`, { status, memo: prompt("메모", "") || "" }); render(); }
+
+async function renderSettlements(v) {
+  const rows = await api("/admin/settlements");
+  v.innerHTML = `<div class="card"><table>
+    <tr><th>ID</th><th>거래</th><th>작업자</th><th>결제액</th><th>수수료</th><th>원천징수(3.3%)</th><th>지급액</th><th>일시</th></tr>
+    ${rows.map(s => `<tr><td>${s.id}</td><td>${s.match_id}</td><td>${s.worker_id}</td><td>${won(s.gross)}</td>
+      <td>${won(s.fee_amount)} <span class="muted">${Math.round(s.fee_rate*1000)/10}%</span></td>
+      <td>${won(s.withholding_amount)}</td><td><b>${won(s.payout_amount)}</b></td><td class="muted">${esc(s.created_at)}</td></tr>`).join("")}
+    </table></div>`;
+}
+
+async function renderSettings(v) {
+  const rows = await api("/admin/settings");
+  const LABEL = { fee_rate:"중개 수수료율 (0.15 = 15%)", withholding_rate:"원천징수율 (0.033 = 3.3%)",
+    pg_provider:"PG 연동", appeal_days:"이의신청 기간(일)", new_worker_rating_count:"신규 뱃지 기준 평가 수" };
+  v.innerHTML = `<div class="card">${rows.map(s => `<div class="row">
+      <label style="width:280px">${LABEL[s.key] || s.key}</label>
+      <input id="set_${s.key}" value="${esc(s.value)}" style="width:160px">
+      <span class="muted">${esc(s.updated_at || "")}</span></div>`).join("")}
+    <button class="btn p" onclick="saveSettings()">저장</button></div>`;
+  window._keys = rows.map(r => r.key);
+}
+async function saveSettings() {
+  const body = {};
+  for (const k of window._keys) body[k] = document.getElementById("set_" + k).value.trim();
+  const r = await api("/admin/settings", body);
+  alert(r.error ? "오류: " + r.error + " " + (r.message || "") : "저장되었습니다.");
+  render();
+}
+render();
+</script></body></html>

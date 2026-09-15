@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>청소로 용돈벌이</title>
+<style>
+  :root { --bg:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --accent:#12b76a; --danger:#d92d20; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:#f2f4f7; font:15px/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; color:var(--ink); }
+  .phone { max-width:430px; margin:0 auto; min-height:100vh; background:var(--bg); display:flex; flex-direction:column; }
+  header { padding:16px 20px 8px; }
+  h1 { font-size:22px; margin:0 0 4px; } .sub { color:var(--muted); font-size:13px; }
+  main { flex:1; padding:8px 20px 100px; }
+  .item { display:flex; gap:10px; align-items:flex-start; padding:14px 0; border-bottom:1px solid var(--line); }
+  .item:last-child { border-bottom:0; }
+  .all { background:#f9fafb; border:1px solid var(--line); border-radius:12px; padding:14px; margin:8px 0 4px; }
+  .all .item { border:0; padding:0; font-weight:700; font-size:16px; }
+  .chk { width:24px; height:24px; border-radius:50%; border:2px solid var(--line); flex:0 0 24px;
+         display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; font-size:14px; }
+  .chk.on { background:var(--accent); border-color:var(--accent); }
+  .label { flex:1; cursor:pointer; }
+  .req { color:var(--accent); font-size:12px; margin-right:4px; }
+  .opt { color:var(--muted); font-size:12px; margin-right:4px; }
+  .view { border:0; background:none; color:var(--muted); text-decoration:underline; font-size:13px; cursor:pointer; padding:0 4px; }
+  footer { position:sticky; bottom:0; background:var(--bg); padding:12px 20px 24px; border-top:1px solid var(--line); }
+  .cta { width:100%; padding:16px; border:0; border-radius:12px; background:var(--accent); color:#fff; font-size:16px; font-weight:700; cursor:pointer; }
+  .cta:disabled { background:#d1d5db; cursor:not-allowed; }
+  .notice { font-size:11px; color:var(--muted); margin-top:10px; line-height:1.5; }
+  .field { margin:12px 0; } .field label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  input,select,textarea { width:100%; padding:12px; border:1px solid var(--line); border-radius:10px; font-size:15px; font-family:inherit; }
+  .seg { display:flex; gap:8px; margin:12px 0; }
+  .seg button { flex:1; padding:12px; border:1px solid var(--line); background:#fff; border-radius:10px; cursor:pointer; }
+  .seg button.on { border-color:var(--accent); color:var(--accent); font-weight:700; }
+  .sheet { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; justify-content:center; }
+  .sheet.on { display:flex; }
+  .sheet .box { background:#fff; width:100%; max-width:430px; border-radius:16px 16px 0 0; padding:20px; max-height:70vh; overflow:auto; }
+  .sheet h3 { margin:0 0 12px; font-size:17px; }
+  .sheet pre { white-space:pre-wrap; font:13px/1.7 inherit; color:#374151; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; }
+  .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#3538cd; }
+  .badge.new { background:#dcfae6; color:#067647; }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--danger); font-size:13px; margin-top:8px; }
+</style></head>
+<body><div class="phone">
+  <header><h1 id="title">약관 동의</h1><div class="sub" id="sub">서비스 이용을 위해 아래 약관에 동의해 주세요.</div></header>
+  <main id="main"></main>
+  <footer id="footer"></footer>
+</div>
+<div class="sheet" id="sheet" onclick="if(event.target.id==='sheet')closeSheet()">
+  <div class="box"><h3 id="sheetTitle"></h3><pre id="sheetBody"></pre>
+    <button class="cta" style="margin-top:16px" onclick="closeSheet()">확인</button></div>
+</div>
+<script>
+const API = location.origin;
+const S = { terms: [], agreed: {}, token: null, me: null, notice: "" };
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
+const api = (m, p, body) => fetch(API + p, {
+  method: m, headers: { "Content-Type": "application/json", ...(S.token ? { Authorization: S.token } : {}) },
+  body: m === "GET" ? undefined : JSON.stringify(body || {}),
+}).then(r => r.json());
+
+const $ = (id) => document.getElementById(id);
+function screen(title, sub, main, footer) {
+  $("title").textContent = title; $("sub").textContent = sub;
+  $("main").innerHTML = main; $("footer").innerHTML = footer;
+}
+function openSheet(code) {
+  const t = S.terms.find(x => x.code === code);
+  $("sheetTitle").textContent = t.title; $("sheetBody").textContent = t.body;
+  $("sheet").classList.add("on");
+}
+const closeSheet = () => $("sheet").classList.remove("on");
+
+// ---------- 1. 약관 동의 ----------
+async function consentScreen() {
+  const r = await api("GET", "/terms");
+  S.terms = r.terms; S.notice = r.notice;
+  drawConsent();
+}
+const allRequiredOk = () => S.terms.filter(t => t.required).every(t => S.agreed[t.code]);
+const allOk = () => S.terms.every(t => S.agreed[t.code]);
+function toggle(code) { S.agreed[code] = !S.agreed[code]; drawConsent(); }
+function toggleAll() { const v = !allOk(); S.terms.forEach(t => S.agreed[t.code] = v); drawConsent(); }
+function drawConsent() {
+  const row = (t) => `<div class="item">
+      <div class="chk ${S.agreed[t.code] ? "on" : ""}" onclick="toggle('${t.code}')">✓</div>
+      <div class="label" onclick="toggle('${t.code}')">
+        <span class="${t.required ? "req" : "opt"}">[${t.required ? "필수" : "선택"}]</span>${esc(t.title)}</div>
+      <button class="view" onclick="openSheet('${t.code}')">보기</button></div>`;
+  screen("약관 동의", "서비스 이용을 위해 아래 약관에 동의해 주세요.",
+    `<div class="all"><div class="item">
+       <div class="chk ${allOk() ? "on" : ""}" onclick="toggleAll()">✓</div>
+       <div class="label" onclick="toggleAll()">전체 동의</div></div>
+       <div class="muted" style="margin-top:6px">선택 항목 동의를 포함합니다.</div></div>
+     ${S.terms.map(row).join("")}`,
+    `<button class="cta" ${allRequiredOk() ? "" : "disabled"} onclick="identityScreen()">동의하고 계속하기</button>
+     <div class="notice">${esc(S.notice)}</div>`);
+}
+
+// ---------- 2. 본인인증 가입 ----------
+let ROLE = "customer";
+function setRole(r) { ROLE = r; identityScreen(); }
+function identityScreen() {
+  screen("본인인증", "휴대폰 본인인증(PASS)으로 가입합니다. 본인확인 고유값(CI)은 해시 처리해 저장합니다.",
+    `<div class="seg">
+       <button class="${ROLE === "customer" ? "on" : ""}" onclick="setRole('customer')">고객으로 가입</button>
+       <button class="${ROLE === "worker" ? "on" : ""}" onclick="setRole('worker')">작업자로 가입</button></div>
+     <div class="field"><label>이름</label><input id="f_name" placeholder="홍길동"></div>
+     <div class="field"><label>생년월일 8자리</label><input id="f_birth" placeholder="19900101" inputmode="numeric"></div>
+     <div class="field"><label>휴대폰번호</label><input id="f_phone" placeholder="01012345678" inputmode="numeric"></div>
+     <div id="err" class="err"></div>`,
+    `<button class="cta" onclick="doVerify()">PASS 인증하고 가입</button>
+     <div class="notice">만 19세 이상만 가입할 수 있습니다.<br>${esc(S.notice)}</div>`);
+}
+async function doVerify() {
+  const body = {
+    role: ROLE, name: $("f_name").value.trim(), birth: $("f_birth").value.trim(),
+    phone: $("f_phone").value.trim(), nickname: $("f_name").value.trim(),
+    consents: Object.fromEntries(S.terms.map(t => [t.code, !!S.agreed[t.code]])),
+  };
+  const r = await api("POST", "/auth/verify", body);
+  if (r.error) return $("err").textContent = r.message || r.error;
+  S.token = r.token; S.me = r.user;
+  home();
+}
+
+// ---------- 3. 홈 ----------
+async function home() {
+  const me = await api("GET", "/me");
+  S.me = me.user;
+  if (me.user.role === "customer") return customerHome();
+  return workerHome(me);
+}
+
+async function customerHome() {
+  const matches = await api("GET", "/matches");
+  screen("내 청소 요청", `${esc(S.me.name)} 고객님`,
+    `${matches.map(m => `<div class="card">
+        <b>${typeName(m.post.cleaning_type)}</b> · ${esc(m.post.region)}
+        <div class="muted">${esc(m.post.scheduled_at)} · ${Number(m.match.price).toLocaleString()}원 · ${statusName(m.match.status)}</div>
+        ${m.post.address ? `<div class="muted">주소: ${esc(m.post.address)}</div>` : ""}
+        <div style="margin-top:10px">
+          ${!m.payment ? `<button class="view" onclick="pay(${m.match.id})">결제하기(에스크로)</button>` : ""}
+          ${m.payment && m.match.status !== "completed" ? `<button class="view" onclick="complete(${m.match.id})">작업 완료 확인</button>` : ""}
+          ${m.match.status === "completed" && !m.rating ? `<button class="view" onclick="rateScreen(${m.match.id})">별점 남기기</button>` : ""}
+          ${m.rating ? `<span class="badge">평가 ${m.rating.score}점</span>` : ""}
+        </div></div>`).join("") || '<div class="muted">진행 중인 요청이 없습니다.</div>'}`,
+    `<button class="cta" onclick="postScreen()">청소 요청 올리기</button>
+     <div class="notice">${esc(S.notice)}</div>`);
+}
+
+function postScreen() {
+  screen("청소 요청 작성", "정확한 주소는 작업자 확정 후에만 공개됩니다.",
+    `<div class="field"><label>청소 종류</label><select id="p_type">
+        <option value="home">가정집 청소</option><option value="move_in">입주 청소</option>
+        <option value="office">사무실 청소</option><option value="aircon">에어컨 청소</option></select></div>
+     <div class="field"><label>희망 일시</label><input id="p_at" placeholder="2026-10-01 10:00:00"></div>
+     <div class="field"><label>지역 (시/도, 시군구, 동)</label>
+       <div style="display:flex;gap:8px"><input id="p_sido" placeholder="서울특별시"><input id="p_gu" placeholder="마포구"><input id="p_dong" placeholder="연남동"></div></div>
+     <div class="field"><label>상세 주소 (확정 후 공개)</label><input id="p_addr" placeholder="연남동 123-45 302호"></div>
+     <div class="field"><label>평수</label><input id="p_py" inputmode="numeric" placeholder="24"></div>
+     <div class="field"><label>희망 금액(원)</label><input id="p_budget" inputmode="numeric" placeholder="120000"></div>
+     <div class="field"><label>요청사항</label><textarea id="p_note" rows="3"></textarea></div>
+     <div id="err" class="err"></div>`,
+    `<button class="cta" onclick="submitPost()">등록하기</button>`);
+}
+async function submitPost() {
+  const r = await api("POST", "/job-posts", {
+    cleaning_type: $("p_type").value, scheduled_at: $("p_at").value.trim(),
+    sido: $("p_sido").value.trim(), sigungu: $("p_gu").value.trim(), dong: $("p_dong").value.trim(),
+    address: $("p_addr").value.trim(), pyeong: Number($("p_py").value || 0),
+    budget: Number($("p_budget").value || 0), note: $("p_note").value.trim(),
+  });
+  if (r.error) return $("err").textContent = r.message || r.error;
+  applicantsScreen(r.post.id);
+}
+
+async function applicantsScreen(postId) {
+  const apps = await api("GET", `/job-posts/${postId}/applications`);
+  screen("지원자", "평균 별점·평가 수·완료 건수 순으로 정렬됩니다.",
+    `${apps.map(a => `<div class="card">
+        <b>${esc(a.worker.nickname || a.worker.name)}</b>
+        ${a.stats.is_new ? '<span class="badge new">신규</span>' : ""}
+        <div class="muted">★ ${a.stats.avg_score} (${a.stats.rating_count}건) · 완료 ${a.stats.completed_count}건 · ${Number(a.price).toLocaleString()}원</div>
+        <div class="muted">${esc(a.message || "")}</div>
+        <button class="view" onclick="select(${postId}, ${a.id})">이 작업자 선택</button>
+      </div>`).join("") || '<div class="muted">아직 지원자가 없습니다.</div>'}`,
+    `<button class="cta" onclick="selectAuto(${postId})">별점 최고 작업자 자동 배정</button>
+     <div class="notice">${esc(S.notice)}</div>`);
+}
+async function select(postId, appId) { const r = await api("POST", `/job-posts/${postId}/select`, { application_id: appId }); after(r); }
+async function selectAuto(postId) { const r = await api("POST", `/job-posts/${postId}/select`, { auto: true }); after(r); }
+function after(r) { if (r.error) return alert(r.message || r.error); alert("확정되었습니다. 주소: " + r.address); customerHome(); }
+async function pay(id) { const r = await api("POST", `/matches/${id}/pay`, {}); if (r.error) alert(r.message || r.error); customerHome(); }
+async function complete(id) {
+  const r = await api("POST", `/matches/${id}/complete`, {});
+  if (r.error) return alert(r.message || r.error);
+  alert(`정산 완료 — 중개수수료 ${r.settlement.fee.toLocaleString()}원, 원천징수 ${r.settlement.wh.toLocaleString()}원 차감`);
+  customerHome();
+}
+
+const REASONS = { no_show:"무단 불참", damage:"파손", rude:"불친절", poor_quality:"청소 미흡", late:"지각", etc:"기타" };
+let RATE = { id: null, score: 0, reason: "" };
+function rateScreen(id) { RATE = { id, score: 0, reason: "" }; drawRate(); }
+function setScore(n) { RATE.score = n; drawRate(); }
+function setReason(r) { RATE.reason = r; drawRate(); }
+function drawRate() {
+  screen("별점 남기기", "완료된 거래만 평가할 수 있습니다.",
+    `<div style="font-size:34px;letter-spacing:4px;margin:8px 0">
+      ${[1,2,3,4,5].map(n => `<span onclick="setScore(${n})" style="cursor:pointer;color:${n <= RATE.score ? "#f5a623" : "#d1d5db"}">★</span>`).join("")}</div>
+     ${RATE.score === 1 ? `<div class="field"><label>1점 사유 (필수)</label>
+        <div class="seg" style="flex-wrap:wrap">${Object.entries(REASONS).map(([k,v]) =>
+          `<button class="${RATE.reason === k ? "on" : ""}" style="flex:0 0 auto" onclick="setReason('${k}')">${v}</button>`).join("")}</div></div>` : ""}
+     <div class="field"><label>후기</label><textarea id="r_text" rows="3"></textarea></div>
+     <div id="err" class="err"></div>`,
+    `<button class="cta" ${RATE.score && (RATE.score !== 1 || RATE.reason) ? "" : "disabled"} onclick="submitRate()">등록</button>`);
+}
+async function submitRate() {
+  const r = await api("POST", `/matches/${RATE.id}/rating`, { score: RATE.score, reason: RATE.reason, review: $("r_text").value });
+  if (r.error) return $("err").textContent = r.message || r.error;
+  customerHome();
+}
+
+// ---------- 작업자 ----------
+const typeName = (t) => ({ home:"가정집 청소", move_in:"입주 청소", office:"사무실 청소", aircon:"에어컨 청소" }[t] || t);
+const statusName = (s) => ({ matched:"확정", working:"작업중", completed:"완료", cancelled:"취소", open:"모집중" }[s] || s);
+
+async function workerHome(me) {
+  const posts = await api("GET", "/job-posts?status=open");
+  const mine = await api("GET", "/matches");
+  const notes = await api("GET", "/notifications");
+  const warn = notes.find(n => n.kind === "sanction_warning" || n.kind === "sanction_withdraw");
+  screen("일감 찾기", `${esc(S.me.name)} 님 · ★ ${me.stats.avg_score} (${me.stats.rating_count}건)${me.stats.is_new ? " · 신규" : ""}`,
+    `${warn ? `<div class="card" style="border-color:#fec84b;background:#fffaeb"><b>${esc(warn.title)}</b><div class="muted">${esc(warn.body)}</div></div>` : ""}
+     ${mine.map(m => `<div class="card"><b>내 작업 · ${statusName(m.match.status)}</b>
+        <div class="muted">${typeName(m.post.cleaning_type)} · ${esc(m.post.scheduled_at)} · ${Number(m.match.price).toLocaleString()}원</div>
+        <div class="muted">${m.post.address ? "주소: " + esc(m.post.address) : "작업 종료 후 주소는 비공개 처리됩니다."}</div>
+        ${m.settlement ? `<div class="muted">정산 ${Number(m.settlement.payout_amount).toLocaleString()}원 (수수료 ${Number(m.settlement.fee_amount).toLocaleString()} · 원천징수 ${Number(m.settlement.withholding_amount).toLocaleString()})</div>` : ""}
+      </div>`).join("")}
+     ${posts.map(p => `<div class="card"><b>${typeName(p.cleaning_type)}</b> · ${esc(p.region)}
+        <div class="muted">${esc(p.scheduled_at)} · ${p.pyeong}평 · ${Number(p.budget).toLocaleString()}원</div>
+        <div class="muted">${esc(p.note || "")}</div>
+        <button class="view" onclick="applyTo(${p.id})">지원하기</button></div>`).join("")
+       || '<div class="muted">모집 중인 일감이 없습니다.</div>'}`,
+    `<div class="notice">정확한 주소는 확정 후 공개되며, 작업 종료 후 비공개 처리됩니다.<br>${esc(S.notice)}</div>`);
+}
+async function applyTo(id) {
+  const r = await api("POST", `/job-posts/${id}/apply`, {});
+  alert(r.error ? (r.message || r.error) : "지원했습니다.");
+  home();
+}
+consentScreen();
+</script></body></html>

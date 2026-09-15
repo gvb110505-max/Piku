@@ -4,3 +4,6 @@ data.db-shm
 data.db-wal
 .vercel
 .env*
+cleaning/cleaning.db
+cleaning/cleaning.db-shm
+cleaning/cleaning.db-wal
