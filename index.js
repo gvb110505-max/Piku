@@ -33,6 +33,8 @@ app.use((req, res, next) => {
 });
 // 이미지는 base64로 들어오므로 기본 100kb 제한으로는 부족하다.
 // 관리자 화면에서 업로드 전에 리사이즈하지만, 서버에서도 상한을 다시 건다.
+// 얼굴 비율 평가 웹앱(/face) — 정적 파일만 서빙하므로 DB 준비 여부와 무관하게 동작해야 한다
+app.use("/face", express.static(path.join(__dirname, "face")));
 app.use(express.json({ limit: "8mb" }));
 // DB 미설정이면 500 크래시 대신 원인을 알려준다
 app.use((req, res, next) => {

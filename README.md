@@ -35,6 +35,7 @@ Postgres가 하나도 없으면 서버는 크래시하지 않고 `/health`가 50
 | `POST /shipments` | 합배송 신청 |
 | `GET /me` | 마이페이지(보유 카드·포인트·주문·결제 한도) |
 | `GET /admin` | 관리자 페이지 |
+| `GET /face/` | 얼굴 비율 평가 웹앱 (정적 페이지, DB 불필요) |
 
 ## 로컬 실행 / 테스트
 
@@ -45,6 +46,7 @@ npm start                # :4000
 
 node test-e2e.js         # 유저 플로우 13항목
 node test-admin.js       # 관리자 API 8항목
+node test-face.js        # 얼굴 비율 점수 12항목
 DATABASE_URL=postgresql://... node test-e2e.js   # Postgres 경로 검증
 ```
 
@@ -70,3 +72,9 @@ HIT 전량 소진 시 판매가 자동 중단된다.
 - **환불**: 품절 경합 시 자동 환불 호출 추가 (`/purchase`의 TODO 참고)
 - **세션**: 현재 tokens 테이블 방식 → 만료 처리 추가 권장
 - **관리자 보호**: `ADMIN_TOKEN`을 반드시 변경. 가능하면 `/admin` 경로에 IP 제한 추가.
+
+## 얼굴 비율 평가 (`/face`)
+
+사진(업로드·카메라)에서 MediaPipe Face Landmarker로 얼굴 특징점 468개를 찾아
+좌우 대칭·얼굴 3등분·인중:턱(1:2)·눈 간격(1:1)·입:코(황금비)를 0~100점으로 매기고 10점 만점으로 합산한다.
+분석은 전부 브라우저에서 이뤄지고 사진은 서버로 전송되지 않는다. 점수 계산은 `face/score.js`(DOM 비의존).

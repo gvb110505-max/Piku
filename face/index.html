@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>얼굴 비율 평가</title>
+<meta name="description" content="사진 속 얼굴의 대칭과 비율을 측정해 점수를 매겨요. 사진은 기기 밖으로 나가지 않아요.">
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1c1b19; --sub: #6b6862; --line: #e6e3dd;
+    --accent: #ff5a3c; --accent-ink: #ffffff; --good: #1f9d6b; --mid: #d99a00; --bad: #d8453b;
+    --track: #eeebe5; --overlay: rgba(255, 90, 60, .9);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141312; --card: #1e1d1b; --ink: #f2f0ec; --sub: #a29e96; --line: #2f2d2a;
+      --accent: #ff6e52; --track: #2a2926;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141312; --card: #1e1d1b; --ink: #f2f0ec; --sub: #a29e96; --line: #2f2d2a;
+    --accent: #ff6e52; --track: #2a2926;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
+  header h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -.02em; }
+  header p { margin: 0; color: var(--sub); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-top: 16px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button, .btn {
+    appearance: none; border: 0; border-radius: 12px; padding: 14px 12px; font: inherit; font-weight: 700;
+    cursor: pointer; text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .primary { background: var(--accent); color: var(--accent-ink); }
+  .ghost { background: var(--track); color: var(--ink); }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=file] { display: none; }
+  .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 28px 12px; text-align: center; color: var(--sub); margin-bottom: 12px; }
+  .drop.over { border-color: var(--accent); color: var(--ink); }
+  .note { font-size: 12.5px; color: var(--sub); margin: 12px 0 0; }
+  .stage { position: relative; border-radius: 14px; overflow: hidden; background: #000; }
+  .stage canvas, .stage video { display: block; width: 100%; height: auto; }
+  .status { text-align: center; color: var(--sub); padding: 10px 0 0; }
+  .status:empty { display: none; }
+  .status.err { color: var(--bad); font-weight: 600; }
+  .hidden { display: none !important; }
+
+  .score { display: flex; align-items: center; gap: 18px; }
+  .ring { position: relative; width: 116px; height: 116px; flex: none; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .num { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .ring .num b { font-size: 34px; letter-spacing: -.03em; line-height: 1; }
+  .ring .num small { display: block; color: var(--sub); font-size: 12px; }
+  .verdict h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.02em; }
+  .verdict p { margin: 0; color: var(--sub); font-size: 14px; }
+  .warn { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--mid) 16%, transparent); font-size: 13px; }
+
+  .metric { padding: 12px 0; border-top: 1px solid var(--line); }
+  .metric:first-child { border-top: 0; padding-top: 0; }
+  .metric .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .metric .name { font-weight: 700; }
+  .metric .val { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .bar { height: 8px; background: var(--track); border-radius: 99px; margin: 6px 0; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 99px; width: 0; transition: width .8s cubic-bezier(.2,.8,.2,1); }
+  .metric .desc { font-size: 12.5px; color: var(--sub); }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  footer { text-align: center; color: var(--sub); font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>얼굴 비율 평가</h1>
+    <p>대칭과 황금비를 기준으로 얼굴을 측정해요. 사진은 서버로 전송되지 않아요.</p>
+  </header>
+
+  <!-- 1) 사진 고르기 -->
+  <section class="card" id="pick">
+    <div class="drop" id="drop">여기에 사진을 끌어다 놓거나<br>아래 버튼으로 골라주세요</div>
+    <div class="btns">
+      <label class="btn primary" for="file">사진 선택</label>
+      <button class="ghost" id="camBtn" type="button">카메라로 찍기</button>
+    </div>
+    <input type="file" id="file" accept="image/*">
+    <p class="note">정면을 보고, 앞머리를 넘기고, 밝은 곳에서 찍은 사진일수록 정확해요.</p>
+  </section>
+
+  <!-- 2) 카메라 -->
+  <section class="card hidden" id="camCard">
+    <div class="stage"><video id="video" playsinline muted></video></div>
+    <div class="actions">
+      <button class="ghost" id="camCancel" type="button">취소</button>
+      <button class="primary" id="shoot" type="button">촬영</button>
+    </div>
+  </section>
+
+  <!-- 3) 결과 -->
+  <section class="card hidden" id="stageCard">
+    <div class="stage"><canvas id="canvas"></canvas></div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="card hidden" id="resultCard">
+    <div class="score">
+      <div class="ring">
+        <svg width="116" height="116" viewBox="0 0 116 116">
+          <circle cx="58" cy="58" r="50" fill="none" stroke="var(--track)" stroke-width="10"/>
+          <circle id="ringArc" cx="58" cy="58" r="50" fill="none" stroke="var(--accent)" stroke-width="10"
+                  stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16"
+                  style="transition: stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)"/>
+        </svg>
+        <div class="num"><div><b id="total">0.0</b><small>/ 10</small></div></div>
+      </div>
+      <div class="verdict">
+        <h2 id="title"></h2>
+        <p id="summary"></p>
+      </div>
+    </div>
+    <div class="warn hidden" id="warn"></div>
+  </section>
+
+  <section class="card hidden" id="metricsCard">
+    <div id="metrics"></div>
+    <div class="actions">
+      <button class="ghost" id="again" type="button">다른 사진</button>
+      <button class="primary" id="save" type="button">결과 저장</button>
+    </div>
+  </section>
+
+  <footer>재미로 보는 측정이에요. 비율 점수는 매력이나 가치를 뜻하지 않아요.</footer>
+</main>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
+import { analyze } from "./score.js";
+
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
+const MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const MAX_SIDE = 1280; // 큰 사진은 줄여서 분석 — 정확도 차이는 없고 속도·메모리만 아낀다
+
+const $ = (id) => document.getElementById(id);
+const canvas = $("canvas"), ctx = canvas.getContext("2d");
+let landmarker = null, loading = null, stream = null;
+
+function getLandmarker() {
+  if (landmarker) return Promise.resolve(landmarker);
+  if (!loading) {
+    loading = FilesetResolver.forVisionTasks(WASM)
+      .then((fs) => FaceLandmarker.createFromOptions(fs, {
+        baseOptions: { modelAssetPath: MODEL },
+        runningMode: "IMAGE",
+        numFaces: 2,
+      }))
+      .then((l) => (landmarker = l))
+      .catch((e) => { loading = null; throw e; });
+  }
+  return loading;
+}
+getLandmarker().catch(() => {}); // 첫 분석을 빠르게 — 미리 받아둔다
+
+function status(msg, err = false) {
+  $("status").textContent = msg;
+  $("status").classList.toggle("err", err);
+}
+function show(ids) {
+  for (const id of ["pick", "camCard", "stageCard", "resultCard", "metricsCard"])
+    $(id).classList.toggle("hidden", !ids.includes(id));
+}
+
+// ---------- 입력 ----------
+$("file").addEventListener("change", (e) => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ""; });
+const drop = $("drop");
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+function loadFile(file) {
+  if (!file.type.startsWith("image/")) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { URL.revokeObjectURL(url); run(img, img.naturalWidth, img.naturalHeight); };
+  img.onerror = () => { URL.revokeObjectURL(url); show(["pick", "stageCard"]); status("이미지를 읽지 못했어요. 다른 사진을 골라주세요.", true); };
+  img.src = url;
+}
+
+$("camBtn").addEventListener("click", async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 } }, audio: false });
+  } catch {
+    show(["pick", "stageCard"]); status("카메라를 쓸 수 없어요. 권한을 확인하거나 사진을 골라주세요.", true);
+    return;
+  }
+  const v = $("video");
+  v.srcObject = stream; v.style.transform = "scaleX(-1)"; // 셀카 미리보기는 거울처럼
+  await v.play();
+  show(["camCard"]);
+});
+function stopCam() { if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; }
+$("camCancel").addEventListener("click", () => { stopCam(); show(["pick"]); });
+$("shoot").addEventListener("click", () => {
+  const v = $("video");
+  const snap = document.createElement("canvas");
+  snap.width = v.videoWidth; snap.height = v.videoHeight;
+  const c = snap.getContext("2d");
+  c.translate(snap.width, 0); c.scale(-1, 1); // 미리보기와 같은 방향으로 저장
+  c.drawImage(v, 0, 0);
+  stopCam();
+  run(snap, snap.width, snap.height);
+});
+
+// ---------- 분석 ----------
+async function run(source, w, h) {
+  // 분석은 원본 비율 그대로(최대 MAX_SIDE)에서, 결과 화면은 얼굴 주변만 잘라서 보여준다
+  const s = Math.min(1, MAX_SIDE / Math.max(w, h));
+  const full = document.createElement("canvas");
+  full.width = Math.round(w * s); full.height = Math.round(h * s);
+  full.getContext("2d").drawImage(source, 0, 0, full.width, full.height);
+  canvas.width = full.width; canvas.height = full.height;
+  ctx.drawImage(full, 0, 0);
+  show(["stageCard"]);
+  status("얼굴을 찾는 중…");
+
+  let res;
+  try {
+    const lm = await getLandmarker();
+    res = lm.detect(full);
+  } catch (e) {
+    console.error(e);
+    show(["pick", "stageCard"]);
+    return status("분석 모델을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.", true);
+  }
+  const faces = res.faceLandmarks || [];
+  if (!faces.length) {
+    show(["pick", "stageCard"]);
+    return status("얼굴을 찾지 못했어요. 얼굴이 크게, 정면으로 나온 사진을 골라주세요.", true);
+  }
+  // 여러 명이면 가장 큰 얼굴
+  const pts = faces
+    .map((f) => f.map((p) => ({ x: p.x * full.width, y: p.y * full.height })))
+    .sort((a, b) => spread(b) - spread(a))[0];
+
+  const result = analyze(pts);
+  const crop = cropBox(pts, full.width, full.height);
+  canvas.width = crop.w; canvas.height = crop.h;
+  ctx.drawImage(full, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+  drawOverlay(pts.map((q) => ({ x: q.x - crop.x, y: q.y - crop.y })));
+  status(faces.length > 1 ? "여러 얼굴 중 가장 크게 나온 얼굴을 측정했어요." : "");
+  render(result);
+  show(["stageCard", "resultCard", "metricsCard"]);
+}
+// 얼굴 박스를 넉넉히(가로 60%, 위 70%, 아래 40%) 키워 4:5로 자른다
+function cropBox(p, W, H) {
+  const xs = p.map((q) => q.x), ys = p.map((q) => q.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const fw = x1 - x0, fh = y1 - y0;
+  let w = fw * 1.6, h = fh * 2.1;
+  if (w / h > 0.8) h = w / 0.8; else w = h * 0.8;
+  w = Math.min(w, W); h = Math.min(h, H);
+  const cx = (x0 + x1) / 2, top = y0 - fh * 0.7 - (h - fh * 2.1) / 2;
+  const x = Math.round(Math.max(0, Math.min(W - w, cx - w / 2)));
+  const y = Math.round(Math.max(0, Math.min(H - h, top)));
+  return { x, y, w: Math.round(w), h: Math.round(h) };
+}
+function spread(p) { const xs = p.map((q) => q.x); return Math.max(...xs) - Math.min(...xs); }
+
+function drawOverlay(p) {
+  const lw = Math.max(1.5, canvas.width / 400);
+  ctx.lineWidth = lw; ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.fillStyle = "rgba(255,90,60,.95)";
+  ctx.setLineDash([lw * 4, lw * 3]);
+  const line = (a, b) => { ctx.beginPath(); ctx.moveTo(p[a].x, p[a].y); ctx.lineTo(p[b].x, p[b].y); ctx.stroke(); };
+  line(10, 152);          // 세로 중심선
+  line(234, 454);         // 얼굴 너비
+  line(130, 359);         // 눈 라인
+  line(61, 291);          // 입 너비
+  // 3등분 가로선
+  for (const i of [9, 2, 152]) {
+    ctx.beginPath(); ctx.moveTo(p[234].x, p[i].y); ctx.lineTo(p[454].x, p[i].y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const i of [10, 9, 2, 152, 130, 243, 463, 359, 61, 291, 64, 294, 234, 454, 13, 14]) {
+    ctx.beginPath(); ctx.arc(p[i].x, p[i].y, lw * 2.2, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function color(v) { return v >= 80 ? "var(--good)" : v >= 55 ? "var(--mid)" : "var(--bad)"; }
+
+function render(r) {
+  const t = $("total"); const target = r.total / 10;
+  const t0 = performance.now();
+  (function tick(now) {
+    const k = Math.min(1, (now - t0) / 900), e = 1 - Math.pow(1 - k, 3);
+    t.textContent = (target * e).toFixed(1);
+    if (k < 1) requestAnimationFrame(tick);
+  })(t0);
+  requestAnimationFrame(() => { $("ringArc").style.strokeDashoffset = String(314.16 * (1 - r.total / 100)); });
+  $("title").textContent = r.title;
+  $("summary").textContent = r.summary;
+  $("warn").classList.toggle("hidden", !r.warnings.length);
+  $("warn").textContent = r.warnings.join(" ");
+
+  const box = $("metrics"); box.innerHTML = "";
+  for (const m of r.metrics) {
+    const el = document.createElement("div"); el.className = "metric";
+    el.innerHTML = `<div class="row"><span class="name"></span><span class="val"></span></div>
+      <div class="bar"><i></i></div><div class="desc"></div>`;
+    el.querySelector(".name").textContent = m.name;
+    el.querySelector(".val").textContent = m.score;
+    el.querySelector(".val").style.color = color(m.score);
+    el.querySelector(".desc").textContent = m.desc;
+    const bar = el.querySelector(".bar i"); bar.style.background = color(m.score);
+    box.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = m.score + "%"; }));
+  }
+  lastResult = r;
+}
+
+// ---------- 저장 / 다시 ----------
+let lastResult = null;
+$("again").addEventListener("click", () => { show(["pick"]); status(""); });
+$("save").addEventListener("click", () => {
+  if (!lastResult) return;
+  const pad = Math.round(canvas.width * 0.04), barH = Math.round(canvas.width * 0.16);
+  const out = document.createElement("canvas");
+  out.width = canvas.width; out.height = canvas.height + barH;
+  const c = out.getContext("2d");
+  c.drawImage(canvas, 0, 0);
+  c.fillStyle = "#1c1b19"; c.fillRect(0, canvas.height, out.width, barH);
+  c.fillStyle = "#ff5a3c"; c.font = `800 ${Math.round(barH * 0.5)}px sans-serif`; c.textBaseline = "middle";
+  const score = (lastResult.total / 10).toFixed(1);
+  c.fillText(score, pad, canvas.height + barH / 2);
+  const sw = c.measureText(score).width;
+  c.fillStyle = "#ffffff"; c.font = `700 ${Math.round(barH * 0.24)}px sans-serif`;
+  c.fillText(lastResult.title, pad * 2 + sw, canvas.height + barH / 2);
+  const a = document.createElement("a");
+  a.download = "face-score.png"; a.href = out.toDataURL("image/png"); a.click();
+});
+</script>
+</body>
+</html>
