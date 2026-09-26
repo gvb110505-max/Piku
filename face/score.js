@@ -99,10 +99,10 @@ function analyze(p) {
 
 function verdict(total) {
   if (total >= 90) return { title: "교과서 같은 비율" };
-  if (total >= 80) return { title: "아주 균형 잡힌 얼굴" };
-  if (total >= 70) return { title: "조화로운 얼굴" };
-  if (total >= 60) return { title: "개성 있는 균형" };
-  return { title: "개성이 뚜렷한 얼굴" };
+  if (total >= 80) return { title: "아주 균형 잡힌 비율" };
+  if (total >= 70) return { title: "조화로운 비율" };
+  if (total >= 60) return { title: "개성 있는 비율" };
+  return { title: "개성이 뚜렷한 비율" };
 }
 
 export { analyze, ratioScore, fitMidline, reflect, PAIRS, MIDLINE };
