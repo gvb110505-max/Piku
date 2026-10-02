@@ -11,4 +11,5 @@ export const colors = {
   textMuted: '#71717A',
   tabInactive: '#A1A1AA',
   tabActive: '#18181B',
+  danger: '#DC2626',
 } as const;

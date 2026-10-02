@@ -12,14 +12,17 @@
 
 ```
 src/app/            # Expo Router 라우트 (파일 = 화면)
-  _layout.tsx       # 루트: GestureHandler, SafeArea, Stack
+  _layout.tsx       # 루트: 로그인 상태별 화면 그룹 보호 (Stack.Protected)
+  (auth)/           # 비로그인: 이메일 입력(sign-in) → 코드 입력(verify)
+  onboarding.tsx    # 가입 직후 username 설정
   index.tsx         # 첫 화면 → /call 리다이렉트
   (tabs)/           # 하단 탭 5개: home · search · call(가운데 강조) · compose · profile
 src/components/     # 공용 컴포넌트 (TabBar 등)
-src/lib/            # env, supabase 클라이언트
+src/lib/            # env, supabase 클라이언트, auth(세션·프로필)
 src/theme/          # 색상
 supabase/migrations # DB 스키마 · RLS (1단계부터 추가)
 supabase/functions  # Edge Functions (2단계부터 추가)
+supabase/tests      # 마이그레이션·RLS 테스트 (scripts/test-db.sh)
 ```
 
 ## 준비
@@ -31,6 +34,33 @@ cp .env.example .env   # Supabase URL / anon key 입력
 
 `.env` 에는 공개 가능한 값(`EXPO_PUBLIC_*`)만 둔다. service_role 키·LiveKit secret 은
 Supabase Edge Function 시크릿(`supabase secrets set ...`)으로만 관리한다.
+
+## Supabase 설정 (1단계부터 필요)
+
+1. supabase.com 에서 프로젝트 생성 → Project Settings → API 의 URL / anon key 를 `.env` 에 입력
+2. **DB 마이그레이션 적용** — 둘 중 하나
+   - 대시보드 SQL Editor 에 `supabase/migrations/*.sql` 을 번호 순서대로 붙여넣고 실행
+   - 또는 CLI: `npx supabase link --project-ref <ref>` → `npx supabase db push`
+3. **이메일 OTP 코드 발송 설정** (기본값은 링크라서 반드시 바꿔야 함)
+   - Authentication → Emails → Templates → **Magic Link** 템플릿 본문에 `{{ .Token }}` 을 넣는다. 예:
+     ```html
+     <h2>CallSNS 인증 코드</h2>
+     <p>아래 코드를 앱에 입력하세요: <strong>{{ .Token }}</strong></p>
+     ```
+   - 신규 가입도 같은 OTP 흐름을 쓰므로 **Confirm signup** 템플릿도 동일하게 `{{ .Token }}` 으로 바꾼다.
+   - Authentication → Providers → Email: Email provider 활성화. (OTP 길이·만료 시간도 여기서 설정 — 앱은 6~10자리 허용)
+4. **메일 발송 한도**: Supabase 기본 메일 서버는 시간당 발송 수가 매우 적다(테스트용).
+   실사용/다인원 테스트 전에는 Authentication → SMTP Settings 에서 자체 SMTP(Resend, SES 등)를 연결한다.
+
+### DB 테스트 (로컬, Docker 불필요)
+
+로컬 Postgres 16 만 있으면 마이그레이션 + RLS 테스트를 돌릴 수 있다.
+
+```bash
+PGHOST=localhost PGUSER=postgres scripts/test-db.sh
+```
+
+`supabase/tests/_shim.sql` 이 Supabase 의 `auth.users`, `auth.uid()`, `anon/authenticated` 역할을 흉내 낸다.
 
 ## 실행
 
@@ -55,7 +85,7 @@ Vercel 프로젝트 Environment Variables 에 `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_
 ## 개발 단계
 
 - [x] 0단계: 프로젝트 세팅 · 탭바 골격
-- [ ] 1단계: 이메일 회원가입/로그인
+- [x] 1단계: 이메일 회원가입/로그인 (이메일 OTP, 가입·로그인 통합, username 온보딩)
 - [ ] 2단계: 전화 기능
 - [ ] 3단계: 피드 / 댓글 / 스토리형 게시물
 - [ ] 4단계: 차단
