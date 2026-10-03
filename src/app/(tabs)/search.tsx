@@ -1,8 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppHeader } from '@/components/AppHeader';
 import { Avatar } from '@/components/Avatar';
 import { profileName } from '@/features/calls/types';
 import { follow, searchProfiles, unfollow, type SearchResult } from '@/features/social/api';
@@ -64,7 +66,7 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.title}>검색</Text>
+      <AppHeader />
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
@@ -86,24 +88,29 @@ export default function SearchScreen() {
         keyExtractor={(r) => r.id}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          q.trim() && !loading ? <Text style={styles.empty}>검색 결과가 없습니다</Text> : null
-        }
+        ListEmptyComponent={q.trim() && !loading ? <Text style={styles.empty}>검색 결과가 없습니다</Text> : null}
         renderItem={({ item }) => {
           const name = profileName(item);
           const mutual = item.i_follow && item.follows_me;
           return (
             <View style={styles.row}>
-              <Avatar name={name} url={item.avatar_url} />
-              <View style={styles.rowText}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {name}
-                </Text>
-                <Text style={styles.sub} numberOfLines={1}>
-                  @{item.username}
-                  {mutual ? ' · 맞팔로우 · 전화 가능' : item.follows_me ? ' · 나를 팔로우함' : ''}
-                </Text>
-              </View>
+              <Pressable
+                onPress={() => router.push({ pathname: '/user/[id]', params: { id: item.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={`${name} 프로필 보기`}
+                style={styles.rowMain}
+              >
+                <Avatar name={name} url={item.avatar_url} />
+                <View style={styles.rowText}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  <Text style={styles.sub} numberOfLines={1}>
+                    @{item.username}
+                    {mutual ? ' · 맞팔로우 · 전화 가능' : item.follows_me ? ' · 나를 팔로우함' : ''}
+                  </Text>
+                </View>
+              </Pressable>
               <Pressable
                 onPress={() => toggleFollow(item)}
                 accessibilityRole="button"
@@ -124,13 +131,13 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  title: { fontSize: 28, fontWeight: '800', color: colors.text, paddingHorizontal: 20, paddingTop: 12 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    margin: 16,
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 6,
     paddingHorizontal: 14,
     height: 46,
     borderRadius: 12,
@@ -140,7 +147,8 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, paddingHorizontal: 20, paddingBottom: 4 },
   list: { paddingHorizontal: 16, paddingBottom: 120 },
   empty: { textAlign: 'center', color: colors.textMuted, marginTop: 32 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowText: { flex: 1, gap: 2 },
   name: { fontSize: 16, fontWeight: '600', color: colors.text },
   sub: { fontSize: 13, color: colors.textMuted },

@@ -1,76 +1,23 @@
 // 웹 2개 브라우저로 실제 통화 E2E (로컬 Supabase + LiveKit + Mailpit + 웹 빌드 서빙이 떠 있어야 함)
 //  - 이메일 OTP 가입(메일은 Mailpit 에서 읽음) → username → 서로 팔로우 → 음성 통화 → 영상 통화 → 거절 → 응답 없음(30초)
-// 사용: APP_URL=http://localhost:4173 node scripts/e2e-web-call.mjs   (playwright 필요: npm i -g playwright)
-import { createRequire } from 'node:module';
-import { execSync } from 'node:child_process';
+// 사용: APP_URL=http://localhost:4173 node scripts/e2e/call.mjs   (playwright 필요: npm i -g playwright)
+import {
+  expectText,
+  followByName,
+  loadPlaywright,
+  log,
+  newPage,
+  runId as run,
+  shot,
+  signUp,
+} from './helpers.mjs';
 
-const require = createRequire(import.meta.url);
-let playwright;
-try {
-  playwright = require('playwright');
-} catch {
-  playwright = require(execSync('npm root -g').toString().trim() + '/playwright');
-}
-const { chromium } = playwright;
-
-const APP = process.env.APP_URL ?? 'http://localhost:4173';
-const MAILPIT = process.env.MAILPIT_URL ?? 'http://127.0.0.1:54324';
-const SHOTS = process.env.SHOTS_DIR;
-const run = Date.now().toString(36).slice(-5);
-let step = 0;
-const log = (m) => console.log(`  ✓ ${m}`);
-
-async function otpFor(email) {
-  for (let i = 0; i < 30; i++) {
-    const res = await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}`);
-    const list = await res.json();
-    if (list.messages?.length) {
-      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${list.messages[0].ID}`)).json();
-      const code = (msg.Text || msg.HTML || '').match(/\b(\d{6})\b/)?.[1];
-      if (code) return code;
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`OTP 메일 없음: ${email}`);
-}
-
-async function shot(page, name) {
-  if (SHOTS) await page.screenshot({ path: `${SHOTS}/${String(++step).padStart(2, '0')}-${name}.png` });
-}
-
-async function signUp(page, email, username) {
-  await page.goto(APP);
-  await page.getByLabel('이메일').fill(email);
-  await page.getByRole('button', { name: '인증 코드 받기' }).click();
-  await page.getByLabel('인증 코드').waitFor();
-  await page.getByLabel('인증 코드').fill(await otpFor(email));
-  await page.getByRole('button', { name: '확인' }).click();
-  await page.getByLabel('사용자 이름').fill(username);
-  await page.getByRole('button', { name: '시작하기' }).click();
-  await page.getByText('연락처').waitFor();
-}
-
-async function followByName(page, username) {
-  await page.getByRole('button', { name: '검색', exact: true }).click();
-  await page.getByLabel('사용자 검색').fill(username);
-  const btn = page.getByRole('button', { name: new RegExp(`${username} 팔로우$`) });
-  await btn.waitFor();
-  await btn.click();
-  await page.getByRole('button', { name: new RegExp(`${username} 팔로우 취소`) }).waitFor();
-  await page.getByRole('button', { name: '전화', exact: true }).click();
-}
-
-const expectText = (page, text, timeout = 15000) => page.getByText(text).first().waitFor({ timeout });
+const { chromium } = loadPlaywright();
 
 const browser = await chromium.launch({
   args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
 });
-const mk = async () => {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, permissions: ['microphone', 'camera'] });
-  const page = await ctx.newPage();
-  page.on('pageerror', (e) => console.log('    [pageerror]', e.message));
-  return page;
-};
+const mk = () => newPage(browser, { permissions: ['microphone', 'camera'] });
 const A = await mk();
 const B = await mk();
 const ua = `ana_${run}`;

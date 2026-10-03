@@ -1,6 +1,9 @@
-# CallSNS (가칭) — 전화 중심 SNS 앱
+# CallSNS (가칭) — 상품 소싱이 편한 SNS
 
-좋아요 대신 댓글, 텍스트 DM 대신 전화로 소통하는 SNS.
+전화가 중심인 SNS. 프로필 상단에 상품(사진 + 링크)을 올려 두고, 맞팔로우한 사람과는 바로 전화로 이야기한다.
+좋아요 대신 댓글, 텍스트 DM 대신 전화.
+
+앱 이름 · 소개 문구 · 로고는 `src/theme/brand.ts` 한 곳에서 바꾼다 (로고 이미지는 `assets/logo.png` 로 넣고 `LOGO` 연결).
 
 - 앱: React Native + Expo SDK 57 (TypeScript, Expo Router, Development Build)
 - 백엔드: Supabase (Auth · Postgres + RLS · Realtime · Edge Functions)
@@ -17,9 +20,15 @@ src/app/                 # Expo Router 라우트 (파일 = 화면)
   onboarding.tsx         # 가입 직후 username 설정
   (tabs)/                # 홈 · 검색 · 전화(가운데) · 작성 · 프로필
   in-call.tsx            # 발신 / 수신 / 통화 중 / 종료 / 마이크 권한 안내
+  user/[id].tsx          # 다른 사람 프로필 (상품 · 팔로우 · 맞팔이면 전화)
+  product/new.tsx        # 상품 추가 (사진 + 링크)
+  settings.tsx           # 설정 (로그아웃 · 이후 차단 목록 · 메시지)
 src/features/calls/      # 통화: API, CallProvider(상태 머신), LiveKit 룸, CallKit/ConnectionService 연동
 src/features/push/       # 기기 토큰 등록, Android 백그라운드 수신 작업
 src/features/social/     # 검색 · 팔로우
+src/features/products/   # 상품 API · 프로필 상품 줄
+src/features/profile/    # 프로필 상단(사진 · 숫자)
+src/components/AppHeader.tsx  # 로고 + 앱 이름 + 소개 문구 상단 바
 plugins/withVoipPush.js  # iOS PushKit → CallKit 네이티브 코드 주입 (config plugin)
 supabase/migrations/     # DB 스키마 · RLS · 서버 함수
 supabase/functions/      # Edge Functions: call-start, call-action, livekit-webhook, call-sweep
@@ -37,6 +46,8 @@ scripts/                 # 테스트 스크립트
 | 전화는 맞팔로우끼리만 (Q5), 차단 관계면 거부, 통화 중이면 거부 | `call_start()` (service_role 전용) |
 | 통화 상태 변경(수락은 수신자만, 30초 전 타임아웃 불가 등) | `call_update()` (service_role 전용) |
 | 통화 기록은 당사자만 조회, 클라이언트는 쓰기 불가 | `calls` RLS + 권한 |
+| 상품은 본인만 등록·삭제, http(s) 링크만, 본인 폴더 이미지만 연결 | `products` 제약 + RLS |
+| 상품 이미지는 본인 폴더(`<user_id>/`)에만 업로드·삭제, 5MB · 이미지 형식만 | Storage `product-images` 정책 |
 
 차단 방향(Q12)은 `public.block_hides()` 한 곳에서만 결정한다 (4단계에서 확정).
 
@@ -132,7 +143,8 @@ docker run -d --name livekit --network supabase_network_<폴더명> -p 7880:7880
 npx supabase functions serve --env-file supabase/functions/.env
 SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... CALL_SWEEP_SECRET=... node scripts/test-calls-api.mjs
 npm run build:web && npx serve -s dist -l 4173 &
-APP_URL=http://localhost:4173 node scripts/e2e-web-call.mjs      # playwright 필요
+APP_URL=http://localhost:4173 node scripts/e2e/call.mjs          # 통화 (playwright 필요)
+APP_URL=http://localhost:4173 node scripts/e2e/products.mjs      # 상품 소싱
 ```
 
 `livekit.yaml` 예시 (로컬 전용 키):
@@ -148,6 +160,7 @@ webhook: { api_key: devkey, urls: [http://supabase_kong_<폴더명>:8000/functio
 - [x] 0단계: 프로젝트 세팅 · 탭바 골격
 - [x] 1단계: 이메일 회원가입/로그인 (이메일 OTP, 가입·로그인 통합, username 온보딩)
 - [x] 2단계: 전화 (검색·팔로우, 맞팔로우 연락처, 1:1 음성/영상, 30초 응답 없음, 네이티브 수신)
+- [x] 2.5단계: 상품 소싱 (프로필 상단 상품 줄, 사진 업로드 + 링크, 남의 프로필) · 상단 로고 바 · 아이콘 탭바 · 여백 정리
 - [ ] 3단계: 피드 / 댓글 / 스토리형 게시물
 - [ ] 4단계: 차단
 - [ ] 5단계: DM

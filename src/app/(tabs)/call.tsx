@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppHeader } from '@/components/AppHeader';
 import { Avatar } from '@/components/Avatar';
 import { fetchContacts, fetchRecentCalls, type CallLogEntry } from '@/features/calls/api';
 import { useCall } from '@/features/calls/CallProvider';
@@ -54,7 +55,7 @@ export default function CallTab() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.title}>전화</Text>
+      <AppHeader />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <SectionList
         sections={sections}
@@ -191,11 +192,10 @@ function shortTime(iso: string): string {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  title: { fontSize: 28, fontWeight: '800', color: colors.text, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
   error: { color: colors.danger, paddingHorizontal: 20 },
   list: { paddingHorizontal: 16, paddingBottom: 120 },
-  section: { fontSize: 13, fontWeight: '700', color: colors.textMuted, marginTop: 16, marginBottom: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 12 },
+  section: { fontSize: 13, fontWeight: '700', color: colors.textMuted, marginTop: 8, marginBottom: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 4, borderRadius: 12 },
   pressed: { backgroundColor: colors.surface },
   rowText: { flex: 1, gap: 2 },
   name: { fontSize: 16, fontWeight: '600', color: colors.text },
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   time: { fontSize: 13, color: colors.textMuted },
   iconBtn: { padding: 6, marginRight: 6 },
-  empty: { alignItems: 'center', gap: 12, paddingVertical: 32 },
+  empty: { alignItems: 'center', gap: 10, paddingVertical: 16 },
   emptyText: { color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
   emptyBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.call },
   emptyBtnText: { color: colors.onCall, fontWeight: '700' },

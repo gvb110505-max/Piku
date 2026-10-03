@@ -4,17 +4,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
 
+import { AppHeader } from './AppHeader';
+
 type Props = {
   title: string;
   note: string;
   children?: ReactNode;
 };
 
-/** 0단계용 빈 화면. 각 기능 단계에서 실제 화면으로 교체한다. */
+/** 아직 구현 전인 탭. 큰 빈 공간 대신 상단에 짧은 안내만 둔다. */
 export function Placeholder({ title, note, children }: Props) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.container}>
+      <AppHeader />
+      <View style={styles.card}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.note}>{note}</Text>
         {children}
@@ -25,7 +28,7 @@ export function Placeholder({ title, note, children }: Props) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.text },
-  note: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
+  card: { marginHorizontal: 16, marginTop: 4, padding: 14, borderRadius: 12, backgroundColor: colors.surface, gap: 4 },
+  title: { fontSize: 15, fontWeight: '700', color: colors.text },
+  note: { fontSize: 13, color: colors.textMuted },
 });

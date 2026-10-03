@@ -78,6 +78,9 @@ function RootNavigator() {
         <Stack.Protected guard={signedIn && !needsOnboarding}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="user/[id]" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="product/new" options={{ presentation: 'modal' }} />
           {/* 발신·수신·통화 중 화면. 통화 상태(CallProvider)에 따라 자동으로 열리고 닫힌다 */}
           <Stack.Screen name="in-call" options={{ presentation: 'fullScreenModal', gestureEnabled: false, animation: 'fade' }} />
         </Stack.Protected>
