@@ -20,6 +20,9 @@ language sql stable as $$
 $$;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 
+-- Supabase Realtime 퍼블리케이션
+create publication supabase_realtime;
+
 -- Supabase 기본 권한과 유사하게 public 의 새 테이블은 API 역할에 열려 있는 상태로 시작
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
@@ -31,5 +34,14 @@ language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub', uid::text, false);
   execute 'set role authenticated';
+end;
+$$;
+
+-- 테스트 헬퍼: 서버(Edge Function, service_role)로 전환
+create function public._test_service() returns void
+language plpgsql as $$
+begin
+  perform set_config('request.jwt.claim.sub', '', false);
+  execute 'set role service_role';
 end;
 $$;

@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
+import { CallProvider } from '@/features/calls/CallProvider';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { isSupabaseConfigured } from '@/lib/env';
 import { colors } from '@/theme/colors';
@@ -32,7 +33,7 @@ export default function RootLayout() {
 }
 
 /**
- * 로그인 상태에 따라 접근 가능한 화면 그룹을 나눈다.
+ * 로그인 상태에 따라 접근 가능한 화면 그룹을 나눈다. 통화 상태는 CallProvider 가 전역으로 관리한다.
  *  - 비로그인          → (auth): 이메일 입력 / 코드 입력
  *  - 로그인 + username 없음 → onboarding
  *  - 로그인 + username 있음 → 탭 (첫 화면: 전화)
@@ -63,18 +64,22 @@ function RootNavigator() {
   const needsOnboarding = signedIn && !profile?.username;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
-      <Stack.Protected guard={needsOnboarding}>
-        <Stack.Screen name="onboarding" />
-      </Stack.Protected>
-      <Stack.Protected guard={signedIn && !needsOnboarding}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
-      </Stack.Protected>
-    </Stack>
+    <CallProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
+        <Stack.Protected guard={needsOnboarding}>
+          <Stack.Screen name="onboarding" />
+        </Stack.Protected>
+        <Stack.Protected guard={signedIn && !needsOnboarding}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(tabs)" />
+          {/* 발신·수신·통화 중 화면. 통화 상태(CallProvider)에 따라 자동으로 열리고 닫힌다 */}
+          <Stack.Screen name="in-call" options={{ presentation: 'fullScreenModal', gestureEnabled: false, animation: 'fade' }} />
+        </Stack.Protected>
+      </Stack>
+    </CallProvider>
   );
 }
 
