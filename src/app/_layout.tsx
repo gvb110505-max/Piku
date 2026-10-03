@@ -1,3 +1,6 @@
+// Android 백그라운드 수신 전화 작업은 앱 시작 시 가장 먼저 등록돼야 한다
+import '@/features/push/backgroundTask';
+
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';

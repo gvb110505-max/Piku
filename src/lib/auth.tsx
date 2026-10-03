@@ -2,6 +2,8 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState, Platform } from 'react-native';
 
+import { unregisterThisDevice } from '@/features/push/devices';
+
 import { getSupabase } from './supabase';
 
 /** 클라이언트가 읽을 수 있는 프로필 컬럼 (email 은 RLS/권한상 다른 사람에게 비공개) */
@@ -81,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshProfile]);
 
   const signOut = useCallback(async () => {
+    // 로그아웃한 기기로 전화·알림이 가지 않도록 먼저 토큰 삭제
+    await unregisterThisDevice().catch(() => undefined);
     await supabase.auth.signOut();
   }, [supabase]);
 

@@ -3,6 +3,7 @@ import { router, usePathname } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState, Vibration } from 'react-native';
 
+import { registerThisDevice } from '@/features/push/devices';
 import { useAuth } from '@/lib/auth';
 import { getSupabase } from '@/lib/supabase';
 
@@ -73,6 +74,8 @@ type Session = {
   local: LocalMedia | null;
   room: CallRoom | null;
   finished: boolean;
+  /** 수락 처리 중 (앱 버튼·네이티브 UI 중복 방지) */
+  accepting: boolean;
   timers: ReturnType<typeof setTimeout>[];
   peerWait: ReturnType<typeof setTimeout> | null;
 };
@@ -86,6 +89,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [controls, setControls] = useState<CallControls>(INITIAL_CONTROLS);
   const sessionRef = useRef<Session | null>(null);
   const endedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 네이티브 UI(잠금화면)에서 먼저 "받기"를 눌렀는데 아직 앱이 그 통화를 모를 때 */
+  const pendingAnswer = useRef<string | null>(null);
+  const acceptRef = useRef<() => Promise<void>>(async () => undefined);
 
   const patchControls = useCallback((patch: Partial<CallControls>) => setControls((c) => ({ ...c, ...patch })), []);
 
@@ -232,6 +238,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         local: null,
         room: null,
         finished: false,
+        accepting: false,
         timers: [],
         peerWait: null,
       };
@@ -241,8 +248,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
       s.timers.push(
         setTimeout(() => finish('missed', null), Math.max(0, CALL_RING_TIMEOUT_SEC * 1000 - Math.max(0, elapsed)) + 5000),
       );
-      Vibration.vibrate([0, 800, 800], true);
       setView({ phase: 'incoming', peer, media: row.media, call: row });
+      if (pendingAnswer.current === row.id) {
+        pendingAnswer.current = null;
+        void acceptRef.current();
+      } else {
+        Vibration.vibrate([0, 800, 800], true);
+      }
     },
     [finish, me],
   );
@@ -320,6 +332,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         local: null,
         room: null,
         finished: false,
+        accepting: false,
         timers: [],
         peerWait: null,
       };
@@ -375,8 +388,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const accept = useCallback(async () => {
     const s = sessionRef.current;
-    if (!s || s.role !== 'callee' || !s.callId || !s.call) return;
-    if (view.phase !== 'incoming') return;
+    if (!s || s.role !== 'callee' || !s.callId || !s.call || s.accepting || s.finished) return;
+    s.accepting = true;
     Vibration.cancel();
     s.timers.forEach(clearTimeout);
     s.timers = [];
@@ -413,7 +426,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
     if (s.room?.hasRemote) goActive();
     else waitForPeer();
-  }, [finish, goActive, joinRoom, patchControls, view.phase, waitForPeer]);
+  }, [finish, goActive, joinRoom, patchControls, waitForPeer]);
 
   const decline = useCallback(() => finish(null, 'decline'), [finish]);
 
@@ -455,16 +468,22 @@ export function CallProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 네이티브 수신 UI(잠금화면 등)에서 받기/끊기
-  const acceptRef = useRef(accept);
   acceptRef.current = accept;
   useEffect(
     () =>
       nativeCallUi.setup({
         onAnswer: (callId) => {
-          if (sessionRef.current?.callId === callId) void acceptRef.current();
+          if (sessionRef.current?.callId === callId) {
+            void acceptRef.current();
+            return;
+          }
+          // 앱이 아직 이 통화를 모름 (푸시로 막 깨어남) → 조회 후 바로 수락
+          pendingAnswer.current = callId;
+          void fetchCall(callId).then((row) => row && presentIncoming(row));
         },
         onEnd: (callId) => {
           if (sessionRef.current?.callId === callId) hangup();
+          else updateCall(callId, 'decline').catch(() => undefined);
         },
         onMute: (callId, muted) => {
           if (sessionRef.current?.callId !== callId) return;
@@ -474,8 +493,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
           });
         },
       }),
-    [hangup],
+    [hangup, presentIncoming],
   );
+
+  // 로그인한 기기를 수신 전화·알림 대상으로 등록 (네이티브만)
+  useEffect(() => {
+    if (me) void registerThisDevice().catch(() => undefined);
+  }, [me]);
 
   // 통화 화면 열기/닫기
   const pathname = usePathname();
