@@ -6,8 +6,8 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { C, R, T, NUM, gradeLabel, gradeColor, gradeSoft } from "@/lib/theme";
+import { CardArt } from "@/components/CardArt";
+import { C, R, T, NUM, gradeLabel, gradeColor } from "@/lib/theme";
 import { imageUrl } from "@/lib/api";
 
 export type CardGroup = {
@@ -30,11 +30,11 @@ export function CollectionCard({ group, selected, onPress }: {
         {src ? (
           <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={160} />
         ) : (
-          <LinearGradient colors={[g + "3D", g + "0F"]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
-            style={st.fill} />
+          // 아직 실물 사진이 없는 카드는 이름에서 만든 자리표시 아트를 쓴다
+          <CardArt name={group.name} holo={hit} />
         )}
 
-        <View style={[st.tag, { backgroundColor: gradeSoft(group.grade), borderColor: g + "66" }]}>
+        <View style={[st.tag, { borderColor: g + "99" }]}>
           <Text style={[st.tagText, { color: g }]}>{gradeLabel(group.grade)}</Text>
         </View>
         {qty > 1 ? <Text style={st.qty}>×{qty}</Text> : null}
@@ -57,8 +57,9 @@ const st = StyleSheet.create({
     backgroundColor: C.panel, borderWidth: 1 },
   fill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
 
+  // 아트가 밝을 수 있으니 칩에는 어두운 판을 깐다 — 반투명 등급색만으로는 글자가 사라진다
   tag: { position: "absolute", top: 6, left: 6, paddingHorizontal: 6, paddingVertical: 3,
-    borderRadius: R.sm, borderWidth: 1 },
+    borderRadius: R.sm, borderWidth: 1, backgroundColor: "rgba(8,8,10,0.74)" },
   tagText: { ...T, fontSize: 8.5, fontWeight: "700", letterSpacing: 0.6 },
 
   qty: { ...NUM, position: "absolute", bottom: 6, right: 7, color: C.text, fontSize: 12, fontWeight: "600",

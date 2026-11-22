@@ -2,8 +2,8 @@
 import React from "react";
 import { View, Text, StyleSheet, ViewStyle } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { C, R, T, NUM, gradeLabel, gradeColor, gradeSoft } from "@/lib/theme";
+import { CardArt } from "@/components/CardArt";
+import { C, R, T, NUM, gradeLabel, gradeColor } from "@/lib/theme";
 import { imageUrl } from "@/lib/api";
 
 const SIZES = {
@@ -28,14 +28,13 @@ export function SlabCard({ name, grade, points, image, size = "md", style }: {
         <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={160} />
       ) : (
         <>
-          <LinearGradient colors={[g + "59", g + "14"]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
-            style={st.fill} />
+          <CardArt name={name || grade} holo={grade === "HIT"} />
           <View style={st.foil} />
         </>
       )}
 
       {size !== "sm" ? (
-        <View style={[st.tag, { backgroundColor: gradeSoft(grade), borderColor: g + "66" }]}>
+        <View style={[st.tag, { borderColor: g + "99" }]}>
           <Text style={{ ...T, color: g, fontSize: 9, fontWeight: "700", letterSpacing: 0.6 }}>
             {gradeLabel(grade)}
           </Text>
@@ -62,7 +61,7 @@ const st = StyleSheet.create({
   foil: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
     backgroundColor: "rgba(255,255,255,0.055)", transform: [{ rotate: "26deg" }, { scaleX: 0.28 }] },
   tag: { position: "absolute", top: 8, left: 8, paddingHorizontal: 7, paddingVertical: 3,
-    borderRadius: R.sm, borderWidth: 1 },
+    borderRadius: R.sm, borderWidth: 1, backgroundColor: "rgba(8,8,10,0.74)" },
   // 사진 위에서도 읽히도록 값에 어두운 판을 깐다
   ptsWrap: { position: "absolute", bottom: 8, right: 8, paddingHorizontal: 6, paddingVertical: 2,
     borderRadius: R.sm, backgroundColor: "rgba(10,10,10,0.72)" },

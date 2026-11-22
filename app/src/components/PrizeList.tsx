@@ -8,7 +8,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
+import { CardArt } from "@/components/CardArt";
 import { C, R, T, NUM } from "@/lib/theme";
 import { imageUrl } from "@/lib/api";
 
@@ -26,11 +26,10 @@ function Tile({ p }: { p: PrizeItem }) {
         {src ? (
           <Image source={{ uri: src }} style={st.fill} contentFit="cover" transition={140} />
         ) : (
-          <LinearGradient colors={[p.color + "3D", p.color + "0F"]}
-            start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={st.fill} />
+          <CardArt name={p.name} holo={p.label === "HIT" || p.color === "#FFC148"} />
         )}
         {p.label ? (
-          <View style={[st.chip, { backgroundColor: "rgba(8,8,10,0.72)", borderColor: p.color + "66" }]}>
+          <View style={[st.chip, { borderColor: p.color + "99" }]}>
             <Text style={[st.chipText, { color: p.color }]}>{p.label}</Text>
           </View>
         ) : null}
@@ -71,12 +70,12 @@ const st = StyleSheet.create({
   fill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
 
   chip: { position: "absolute", top: 6, left: 6, paddingHorizontal: 6, paddingVertical: 3,
-    borderRadius: 5, borderWidth: 1 },
+    borderRadius: 5, borderWidth: 1, backgroundColor: "rgba(8,8,10,0.74)" },
   chipText: { ...T, fontSize: 8.5, fontWeight: "700", letterSpacing: 0.5 },
 
   qty: { position: "absolute", top: 6, right: 6, paddingHorizontal: 7, paddingVertical: 3,
     borderRadius: R.sm },
-  qtyText: { ...NUM, color: "#0A0A0A", fontSize: 11, fontWeight: "800" },
+  qtyText: { ...NUM, color: "#08080A", fontSize: 11, fontWeight: "800" },
 
   name: { ...T, color: C.n200, fontSize: 12, lineHeight: 16, marginTop: 8 },
 });
