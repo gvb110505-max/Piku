@@ -27,7 +27,7 @@ export default function Me() {
       await Api.devVerify(birth.trim());
       await loadIdent(); await refresh();
       setBirth("");
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "실패했어요."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "처리하지 못했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -57,12 +57,12 @@ export default function Me() {
         </Row>
         {ident?.verified ? (
           <Sub style={{ marginTop: 6 }}>
-            {ident.is_minor ? "만 19세 미만으로 확인되어 결제 한도가 적용됩니다." : "성인 확인 완료 · 결제 한도 없음"}
+            {ident.is_minor ? "만 19세 미만 · 결제 한도 적용" : "성인 확인 완료 · 한도 없음"}
           </Sub>
         ) : (
           <>
             <Sub style={{ marginTop: 6 }}>
-              본인확인 전에는 미성년자 기준(1일 10만원)이 적용됩니다. PASS 인증은 준비 중입니다.
+              본인확인 전에는 하루 10만원까지 결제됩니다. PASS 인증은 준비 중입니다.
             </Sub>
             {ident?.dev_mode ? (
               <>
@@ -95,7 +95,7 @@ export default function Me() {
 
       <Card>
         <H2>배송 신청</H2>
-        {!me?.shipments?.length ? <Empty text="배송 신청 내역이 없어요." /> : (
+        {!me?.shipments?.length ? <Empty text="배송 신청 내역이 없습니다." /> : (
           <View style={{ marginTop: 10, gap: 10 }}>
             {me.shipments.map((s: any) => (
               <View key={s.id}>
@@ -114,7 +114,7 @@ export default function Me() {
 
       <Card>
         <H2>포인트 내역</H2>
-        {!me?.point_logs?.length ? <Empty text="내역이 없어요." /> : (
+        {!me?.point_logs?.length ? <Empty text="내역이 없습니다." /> : (
           <View style={{ marginTop: 10, gap: 8 }}>
             {me.point_logs.slice(0, 20).map((l: any) => (
               <Row key={l.id} style={{ justifyContent: "space-between" }}>

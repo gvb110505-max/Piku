@@ -63,13 +63,13 @@ export function CheckoutSheet({ checkout, onPaid, onClose }: {
   async function openLink() {
     if (!state.pay_url) return;
     try { await Linking.openURL(state.pay_url); }
-    catch { setErr("결제 링크를 열지 못했어요. 링크를 복사해 브라우저에서 열어주세요."); }
+    catch { setErr("링크를 열지 못했습니다. 복사해서 브라우저에 붙여주세요."); }
   }
 
   async function cancel() {
     setBusy(true);
     try { await Api.cancelCheckout(state.uid); onClose(); }
-    catch (e) { setErr(e instanceof ApiError ? e.message : "취소하지 못했어요."); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "취소하지 못했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -80,7 +80,7 @@ export function CheckoutSheet({ checkout, onPaid, onClose }: {
       const r = await Api.confirmDev(state.uid);
       setState(r);
       if (r.result && !done.current) { done.current = true; onPaid(r.result); }
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "실패했어요."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "처리하지 못했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -112,8 +112,8 @@ export function CheckoutSheet({ checkout, onPaid, onClose }: {
                 <Text style={st.infoLabel}>입금 계좌</Text>
                 <Text style={st.infoValue}>{state.bank}</Text>
                 <Sub style={{ marginTop: 8, lineHeight: 19 }}>
-                  입금자명을 <Text style={{ color: C.text }}>{state.uid}</Text> 로 넣어주세요.
-                  이름이 다르면 확인이 늦어질 수 있어요.
+                  입금자명을 <Text style={{ color: C.text }}>{state.uid}</Text>로 적어주세요.
+                  다르면 확인이 안 됩니다.
                 </Sub>
               </View>
             ) : null}
@@ -127,7 +127,7 @@ export function CheckoutSheet({ checkout, onPaid, onClose }: {
             {!state.pay_url && !state.bank ? (
               <View style={st.info}>
                 <Sub style={{ lineHeight: 19 }}>
-                  결제 수단이 아직 등록되지 않았어요. 주문번호 {state.uid} 를 알려주시면 안내해드립니다.
+                  결제 수단이 등록되지 않았습니다. 주문번호 {state.uid}로 문의해주세요.
                 </Sub>
               </View>
             ) : null}
@@ -138,8 +138,8 @@ export function CheckoutSheet({ checkout, onPaid, onClose }: {
               {left ? <Text style={st.timer}>{left}</Text> : null}
             </View>
             <Sub style={{ lineHeight: 19 }}>
-              결제가 확인되면 이 화면에서 바로 열립니다. 앱을 닫아도 결제는 유지되고,
-              {left ? " 남은 시간이 지나면" : " 시간이 지나면"} 잡아둔 수량이 풀립니다.
+              앱을 닫아도 주문은 남아 있습니다.
+              {left ? " 남은 시간이 지나면" : " 시간이 지나면"} 잡아둔 1구가 풀립니다.
             </Sub>
 
             {state.dev_mode ? (
@@ -156,11 +156,11 @@ export function CheckoutSheet({ checkout, onPaid, onClose }: {
         ) : (
           <>
             <ErrorBox message={
-              state.status === "expired" ? "결제 시간이 지나 주문이 취소됐어요. 다시 시도해주세요."
-                : state.status === "cancelled" ? "취소된 주문이에요."
+              state.status === "expired" ? "시간이 지나 취소된 주문입니다."
+                : state.status === "cancelled" ? "취소된 주문입니다."
                 : state.fail_reason
-                  ? "결제는 확인됐지만 상품 확정에 실패했어요. 환불 요청이 접수됐습니다."
-                  : "처리할 수 없는 주문이에요."} />
+                  ? "입금은 확인됐지만 개봉에 실패했습니다. 환불 요청이 접수됐습니다."
+                  : "처리할 수 없는 주문입니다."} />
             <Button title="닫기" onPress={onClose} style={{ marginTop: 14 }} />
           </>
         )}

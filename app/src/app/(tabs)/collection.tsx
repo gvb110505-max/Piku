@@ -69,7 +69,7 @@ export default function Collection() {
       for (const id of selectedIds) await Api.exchange(id);
       setSel(new Set());
       await refresh();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "교환에 실패했어요."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "교환하지 못했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -80,7 +80,7 @@ export default function Collection() {
       await Api.ship(selectedIds, address.trim());
       setSel(new Set()); setAddress(""); setShipOpen(false);
       await refresh();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "배송 신청에 실패했어요."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "배송 신청에 실패했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -102,7 +102,7 @@ export default function Collection() {
 
         {err ? <ErrorBox message={err} /> : null}
 
-        {!groups.length ? <Empty text="아직 보유한 카드가 없어요. 팩을 열어보세요." /> : (
+        {!groups.length ? <Empty text="보유한 카드가 없습니다." /> : (
           <View style={st.grid}>
             {groups.map((g) => (
               <CollectionCard key={g.key} group={g}
@@ -151,7 +151,7 @@ export default function Collection() {
           <View style={st.handle} />
           <H2>실물 배송 신청</H2>
           <Sub style={{ marginTop: 6, lineHeight: 19 }}>
-            선택한 {selectedIds.length}장을 함께 보내드립니다(합배송). 배송비 {won(SHIP_FEE)}은 신청자 부담입니다.
+            {selectedIds.length}장 합배송. 배송비 {won(SHIP_FEE)}는 본인 부담입니다.
           </Sub>
           <Field label="받는 주소" placeholder="도로명 주소, 상세주소"
             value={address} onChangeText={setAddress} multiline />

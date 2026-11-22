@@ -27,7 +27,7 @@ export default function Market() {
   const load = useCallback(async () => {
     setErr(null);
     try { setItems((await Api.listings({ q: q.trim() || undefined, kind: kind || undefined, sort: sort || undefined })).items); }
-    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했어요."); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했습니다."); }
   }, [q, kind, sort]);
 
   useEffect(() => { load(); }, [kind, sort]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -65,7 +65,7 @@ export default function Market() {
 
       {err ? <ErrorBox message={err} onRetry={load} /> : null}
       {!items && !err ? <Loading /> : null}
-      {items && !items.length ? <Empty text="등록된 상품이 없어요. 첫 판매를 등록해보세요." /> : null}
+      {items && !items.length ? <Empty text="등록된 상품이 없습니다." /> : null}
 
       {items?.length ? (
         <View style={st.grid}>

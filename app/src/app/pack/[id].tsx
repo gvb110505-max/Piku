@@ -41,7 +41,7 @@ export default function PackDetail() {
   const load = useCallback(async () => {
     setErr(null);
     try { setO(await Api.pack(packId)); }
-    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했어요."); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했습니다."); }
   }, [packId]);
 
   useEffect(() => { load(); }, [load]);
@@ -51,7 +51,7 @@ export default function PackDetail() {
     if (!o) return;
     setBusy(true); setErr(null);
     try { setCheckout(await Api.checkout(o.pack.id, o.pack.price)); }
-    catch (e) { setErr(e instanceof ApiError ? e.message : "결제를 시작하지 못했어요."); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "결제를 시작하지 못했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -147,7 +147,7 @@ export default function PackDetail() {
           </Text>
         </Row>
         <Bar value={p.total_slots ? p.sold_slots / p.total_slots : 0} colors={hue} />
-        <Sub style={{ marginTop: 8 }}>남은 슬롯 {p.remaining_slots.toLocaleString("ko-KR")}구</Sub>
+        <Sub style={{ marginTop: 8 }}>남은 {p.remaining_slots.toLocaleString("ko-KR")}구</Sub>
       </Card>
 
       {/* 라스트원 — 마지막 1구를 여는 사람 몫. 보장과 성격이 달라 따로 크게 둔다. */}
@@ -169,8 +169,8 @@ export default function PackDetail() {
             </View>
           </Row>
           <Sub style={{ marginTop: 10, lineHeight: 18 }}>
-            마지막 슬롯을 여는 분께 확률과 무관하게 지급됩니다.
-            {o.last_one.awarded ? "" : ` 남은 ${p.remaining_slots}구가 모두 팔리면 확정됩니다.`}
+            마지막 1구를 연 사람 몫입니다.
+            {o.last_one.awarded ? "" : ` 남은 ${p.remaining_slots.toLocaleString("ko-KR")}구가 팔리면 주인이 정해집니다.`}
           </Sub>
         </Card>
       ) : null}
@@ -181,7 +181,7 @@ export default function PackDetail() {
             <H2>GUARANTEED</H2>
             <Sub>{o.guaranteed.filter((g) => !g.awarded).length} / {o.guaranteed.length} 남음</Sub>
           </Row>
-          <Sub style={{ marginTop: 4 }}>지정된 순번의 개봉자에게 확률과 무관하게 추가 지급됩니다.</Sub>
+          <Sub style={{ marginTop: 4 }}>아래 순번을 열면 뽑은 카드와 함께 받습니다.</Sub>
 
           {/* 같은 상품이 순번만 달리해 반복되는 경우가 대부분이라, 상품은 한 번만 보여주고
               순번은 칩으로 늘어놓는다. 10줄 반복은 읽히지 않는다. */}
@@ -207,7 +207,7 @@ export default function PackDetail() {
 
           {nextG ? (
             <Sub style={{ marginTop: 12 }}>
-              다음 보장 #{nextG.slot_no}까지 {nextG.slot_no - p.sold_slots}번 남았어요.
+              다음 보장 #{nextG.slot_no} — {nextG.slot_no - p.sold_slots}구 남음
             </Sub>
           ) : null}
         </Card>
@@ -222,8 +222,8 @@ export default function PackDetail() {
           </Text>
         </Row>
         <Sub style={{ marginTop: 6, lineHeight: 18 }}>
-          숫자는 지금 남아 있는 재고 수량입니다. HIT {hitLeft.toLocaleString("ko-KR")}장 +
-          일반 {o.point_remaining.toLocaleString("ko-KR")}장 = 남은 슬롯 {p.remaining_slots.toLocaleString("ko-KR")}.
+          HIT {hitLeft.toLocaleString("ko-KR")}장 + 일반 {o.point_remaining.toLocaleString("ko-KR")}장
+          = 남은 {p.remaining_slots.toLocaleString("ko-KR")}구
         </Sub>
         <PrizeList sections={sections} />
       </Card>
@@ -238,8 +238,8 @@ export default function PackDetail() {
         style={{ marginTop: 20 }}
       />
       <Sub style={{ marginTop: 12, lineHeight: 19 }}>
-        결제 링크로 결제하면 입금 확인 뒤 바로 개봉됩니다. 랜덤팩은 Piku가 직접 판매하며,
-        개봉 결과는 포인트로 교환하거나 실물 배송을 신청할 수 있어요.
+        입금이 확인되면 바로 열립니다. 나온 카드는 포인트로 바꾸거나 실물로 받습니다.
+        랜덤팩은 Piku가 직접 판매합니다.
       </Sub>
 
       {checkout ? (

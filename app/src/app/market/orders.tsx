@@ -32,7 +32,7 @@ export default function MyTrades() {
   const load = useCallback(async () => {
     setErr(null);
     try { setData(await Api.myTrades()); }
-    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했어요."); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했습니다."); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -43,7 +43,7 @@ export default function MyTrades() {
       setGuide({ code: r.inbound_code, steps: r.steps, warning: r.warning });
       setPickupFor(null); setAddr(""); setTel("");
       await load();
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "신청에 실패했어요."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "신청에 실패했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -86,7 +86,7 @@ export default function MyTrades() {
       {!data && !err ? <Loading /> : null}
 
       {tab === "bought" && data ? (
-        !data.bought.length ? <Empty text="구매 내역이 없어요." /> :
+        !data.bought.length ? <Empty text="구매 내역이 없습니다." /> :
         data.bought.map((o) => (
           <Card key={o.id}>
             <Row style={{ justifyContent: "space-between" }}>
@@ -96,14 +96,14 @@ export default function MyTrades() {
             <Sub style={{ marginTop: 6 }}>{o.order_uid} · {won(o.buyer_total)}</Sub>
             {o.out_tracking ? <Sub style={{ marginTop: 4 }}>운송장 {o.out_tracking}</Sub> : null}
             {o.status === "failed" ? (
-              <Sub style={{ marginTop: 6, color: C.danger }}>검수 불합격: {o.fail_reason} · 전액 환불 처리됩니다.</Sub>
+              <Sub style={{ marginTop: 6, color: C.danger }}>검수 불합격: {o.fail_reason} · 전액 환불</Sub>
             ) : null}
           </Card>
         ))
       ) : null}
 
       {tab === "sold" && data ? (
-        !data.sold.length ? <Empty text="판매 내역이 없어요." /> :
+        !data.sold.length ? <Empty text="판매 내역이 없습니다." /> :
         data.sold.map((o) => (
           <Card key={o.id}>
             <Row style={{ justifyContent: "space-between" }}>
@@ -138,7 +138,7 @@ export default function MyTrades() {
       ) : null}
 
       {tab === "listings" && data ? (
-        !data.listings.length ? <Empty text="등록한 상품이 없어요." /> :
+        !data.listings.length ? <Empty text="등록한 상품이 없습니다." /> :
         data.listings.map((l) => (
           <Pressable key={l.id} onPress={() => router.push(`/market/${l.id}`)}>
             <Card>

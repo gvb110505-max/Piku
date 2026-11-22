@@ -61,8 +61,8 @@ export default function MarketItem() {
           <H2>{l.title}</H2>
           <Sub style={{ marginTop: 6 }}>주문번호 {done}</Sub>
           <Sub style={{ marginTop: 12 }}>
-            결제 대금은 검수 통과 시까지 Piku가 보관합니다. 판매자가 상품을 보내면 검수 후 발송해드려요.
-            검수에 통과하지 못하면 전액 환불됩니다.
+            대금은 Piku가 보관합니다. 판매자가 보낸 상품을 검수한 뒤 발송합니다.
+            불합격이면 전액 환불됩니다.
           </Sub>
           <Button title="내 거래 보기" onPress={() => router.replace("/market/orders")} style={{ marginTop: 16 }} />
         </Card>
@@ -100,7 +100,7 @@ export default function MarketItem() {
             <Sub style={{ marginTop: 4 }}>체결 {quote.trade_count}건 · 판매중 {quote.active_listings}건</Sub>
           </View>
         ) : (
-          <Sub style={{ marginTop: 8 }}>아직 체결 기록이 없어요. 첫 거래가 시세의 기준이 됩니다.</Sub>
+          <Sub style={{ marginTop: 8 }}>체결 기록이 없습니다.</Sub>
         )}
       </Card>
 
@@ -125,7 +125,7 @@ export default function MarketItem() {
       {mine ? (
         <Card><Sub>본인이 등록한 상품입니다.</Sub></Card>
       ) : l.status !== "active" ? (
-        <Card><Sub>판매가 완료된 상품입니다.</Sub></Card>
+        <Card><Sub>판매 완료된 상품입니다.</Sub></Card>
       ) : (
         <>
           <Field label="받는 주소" placeholder="도로명 주소, 상세주소" value={address} onChangeText={setAddress} multiline />

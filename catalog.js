@@ -25,7 +25,7 @@ function milestones(slots) {
 // tier: premium = 상단 큰 화면(히어로), normal = 가로 슬라이드
 const PACKS = [
   {
-    name: "리자몽 SAR 마스터", price: 100000, list_price: 130000, slots: 300, tier: "premium",
+    name: "BLANK 01", price: 100000, list_price: 130000, slots: 300, tier: "premium",
     hits: [
       ["리자몽 SAR (PSA10)", 1, 4000000, 4500000],
       ["리자몽 UR", 2, 1000000, 1200000],
@@ -36,7 +36,7 @@ const PACKS = [
     last_one: ["리자몽 SAR 라스트원 슬랩", 2500000],
   },
   {
-    name: "원종 3신조 하이엔드", price: 50000, list_price: 65000, slots: 300, tier: "premium",
+    name: "BLANK 02", price: 50000, list_price: 65000, slots: 300, tier: "premium",
     hits: [
       ["파이어 SAR", 1, 1300000, 1500000],
       ["프리져 SAR", 1, 1200000, 1400000],
@@ -47,7 +47,7 @@ const PACKS = [
     last_one: ["원종 3신조 SAR 3종 세트", 3600000],
   },
   {
-    name: "뮤츠 컬렉터", price: 30000, list_price: 39000, slots: 500, tier: "premium",
+    name: "BLANK 03", price: 30000, list_price: 39000, slots: 500, tier: "premium",
     hits: [
       ["뮤츠 UR (PSA10)", 1, 1800000, 2000000],
       ["뮤츠 SAR", 2, 620000, 700000],
@@ -58,7 +58,7 @@ const PACKS = [
     last_one: ["뮤츠 UR 라스트원 슬랩", 1800000],
   },
   {
-    name: "이브이 프리미엄", price: 20000, list_price: 26000, slots: 800, tier: "normal",
+    name: "BLANK 04", price: 20000, list_price: 26000, slots: 800, tier: "normal",
     hits: [
       ["이브이즈 SAR", 2, 1050000, 1200000],
       ["님피아 SR", 4, 350000, 400000],
@@ -69,7 +69,7 @@ const PACKS = [
     last_one: ["이브이즈 SAR 라스트원", 1200000],
   },
   {
-    name: "피카츄 데일리", price: 10000, list_price: 13000, slots: 1500, tier: "normal",
+    name: "BLANK 05", price: 10000, list_price: 13000, slots: 1500, tier: "normal",
     hits: [
       ["피카츄 프로모 (PSA10)", 1, 1300000, 1500000],
       ["피카츄 SAR", 3, 520000, 600000],
@@ -80,7 +80,7 @@ const PACKS = [
     last_one: ["피카츄 SAR 라스트원", 900000],
   },
   {
-    name: "테라스탈 챌린지", price: 5000, list_price: 6500, slots: 3000, tier: "normal",
+    name: "BLANK 06", price: 5000, list_price: 6500, slots: 3000, tier: "normal",
     hits: [
       ["테라스탈 리자몽", 2, 880000, 1000000],
       ["테라스탈 SAR", 5, 260000, 300000],
@@ -91,7 +91,7 @@ const PACKS = [
     last_one: ["테라스탈 리자몽 라스트원", 900000],
   },
   {
-    name: "스타터 부스터", price: 3000, list_price: 4000, slots: 5000, tier: "normal",
+    name: "BLANK 07", price: 3000, list_price: 4000, slots: 5000, tier: "normal",
     hits: [
       ["이상해꽃 SAR", 3, 520000, 600000],
       ["꼬부기 계열 SR", 15, 85000, 100000],
@@ -102,7 +102,7 @@ const PACKS = [
     last_one: ["이상해꽃 SAR 라스트원", 600000],
   },
   {
-    name: "럭키 드로우", price: 2000, list_price: 2600, slots: 8000, tier: "normal",
+    name: "BLANK 08", price: 2000, list_price: 2600, slots: 8000, tier: "normal",
     hits: [
       ["뮤 SAR", 2, 700000, 800000],
       ["럭키 SR", 20, 70000, 80000],
@@ -113,7 +113,7 @@ const PACKS = [
     last_one: ["뮤 SAR 라스트원", 700000],
   },
   {
-    name: "원코인 데일리", price: 1000, list_price: 1300, slots: 10000, tier: "normal",
+    name: "BLANK 09", price: 1000, list_price: 1300, slots: 10000, tier: "normal",
     hits: [
       ["리자몽 AR", 1, 880000, 1000000],
       ["데일리 SR", 10, 70000, 80000],
@@ -124,7 +124,7 @@ const PACKS = [
     last_one: ["리자몽 AR 라스트원", 880000],
   },
   {
-    name: "미니 원코인", price: 500, list_price: 700, slots: 12000, tier: "normal",
+    name: "BLANK 10", price: 500, list_price: 700, slots: 12000, tier: "normal",
     hits: [
       ["피카츄 AR", 1, 260000, 300000],
       ["미니 SR", 10, 42000, 50000],
@@ -137,7 +137,7 @@ const PACKS = [
 ];
 
 const WELCOME = {
-  name: "웰컴 팩", price: 0, point_price: 1000, slots: 2000,
+  name: "BLANK 11", price: 0, point_price: 1000, slots: 2000,
   hits: [["피카츄 프로모(웰컴)", 60, 5000, 3000]],
 };
 

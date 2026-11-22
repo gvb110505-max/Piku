@@ -22,7 +22,7 @@ async function shrink(uri: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const im = new (globalThis as any).Image();
     im.crossOrigin = "anonymous";
-    im.onerror = () => reject(new Error("이미지를 읽지 못했어요."));
+    im.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
     im.onload = () => {
       const scale = Math.min(1, LONG_EDGE / Math.max(im.width, im.height));
       const cv = document.createElement("canvas");
@@ -64,7 +64,7 @@ export function PhotoPicker({ urls, onChange }: {
       }
       onChange([...urls, ...added]);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "사진을 올리지 못했어요.");
+      setErr(e instanceof ApiError ? e.message : "사진을 올리지 못했습니다.");
     } finally { setBusy(false); }
   }
 
@@ -88,7 +88,7 @@ export function PhotoPicker({ urls, onChange }: {
         ) : null}
       </ScrollView>
       <Text style={st.hint}>
-        {err || "첫 번째 사진이 목록 대표로 쓰여요. 카드 앞면·뒷면·상태가 보이게 찍어주세요."}
+        {err || "첫 장이 대표 사진입니다. 앞면·뒷면·흠집이 보이게 찍어주세요."}
       </Text>
     </View>
   );

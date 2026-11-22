@@ -64,7 +64,7 @@ export default function Home() {
   const load = useCallback(async () => {
     setErr(null);
     try { setPacks(await Api.packs()); }
-    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했어요."); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "불러오지 못했습니다."); }
   }, []);
 
   // 아래 것들은 부가 정보다 — 실패해도 화면을 막지 않는다.
@@ -96,7 +96,7 @@ export default function Home() {
   async function openWelcome() {
     setBusy(true);
     try { await Api.welcome(); await refresh(); router.push("/(tabs)/collection"); }
-    catch (e) { setErr(e instanceof ApiError ? e.message : "실패했어요."); }
+    catch (e) { setErr(e instanceof ApiError ? e.message : "처리하지 못했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -128,7 +128,7 @@ export default function Home() {
         <View style={st.topBar}>
           <View style={{ flex: 1 }}>
             <Text style={st.hello} numberOfLines={1}>
-              안녕하세요, {me?.user.nickname || "트레이너"}님
+              {me?.user.nickname || "트레이너"}님
             </Text>
             <Text style={st.points}>{pt(me?.user.points ?? 0)}</Text>
           </View>
@@ -148,7 +148,7 @@ export default function Home() {
         </View>
 
         {err ? <ErrorBox message={err} onRetry={load} /> : null}
-        {!packs && !err ? <Loading text="확률 불러오는 중" /> : null}
+        {!packs && !err ? <Loading text="불러오는 중" /> : null}
 
         {showPacks && premium.length ? (
           <View style={{ marginTop: 18 }}>
@@ -189,7 +189,7 @@ export default function Home() {
             <Head title="웰컴팩" note="계정당 1회" />
             <View style={st.welcome}>
               <Sub style={{ lineHeight: 20 }}>
-                가입 시 드린 {pt(welcome!.pack.point_price)}로 바로 열 수 있어요. 결제 없이 한 번.
+                가입 포인트 {pt(welcome!.pack.point_price)}로 바로 열립니다.
               </Sub>
               <Button title={`${pt(welcome!.pack.point_price)}로 개봉`} onPress={openWelcome} loading={busy}
                 disabled={(me?.user.points ?? 0) < welcome!.pack.point_price}

@@ -38,7 +38,7 @@ export function PackCard({ o, onPress, width }: { o: Odds; onPress: () => void; 
         <LinearGradient colors={[h1, h2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           style={[st.bar, { width: `${Math.min(100, sold * 100)}%` }]} />
       </View>
-      <Text style={st.left}>잔여 {p.remaining_slots}/{p.total_slots}</Text>
+      <Text style={st.left}>잔여 {p.remaining_slots.toLocaleString("ko-KR")}/{p.total_slots.toLocaleString("ko-KR")}</Text>
     </Pressable>
   );
 }

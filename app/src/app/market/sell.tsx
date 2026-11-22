@@ -99,10 +99,10 @@ export default function Sell() {
       <Card>
         <H2>판매 방법</H2>
         <Sub style={{ marginTop: 8, lineHeight: 20 }}>
-          1. 상품이 팔리면 <Text style={{ color: C.accent200 }}>수거 신청</Text>을 눌러 접수번호를 받습니다{"\n"}
+          1. 팔리면 <Text style={{ color: C.accent200 }}>수거 신청</Text>을 눌러 접수번호를 받습니다{"\n"}
           2. 박스 윗면에 접수번호를 유성펜으로 크게 적습니다{"\n"}
-          3. 집 앞에 두면 한진택배가 방문 수거합니다 (택배사 접수 불필요, 수거비 Piku 부담){"\n"}
-          4. 검수 통과 후 등록하신 계좌로 정산됩니다
+          3. 집 앞에 두면 한진택배가 가져갑니다. 택배 접수·수거비는 Piku가 부담합니다{"\n"}
+          4. 검수를 통과하면 등록한 계좌로 정산됩니다
         </Sub>
       </Card>
     </Screen>

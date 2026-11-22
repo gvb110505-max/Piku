@@ -26,7 +26,7 @@ export default function Login() {
       const r = await Api.requestCode(digits);
       setSent(true);
       setDevCode(r.dev_code ?? null);   // 개발 모드에서만 내려온다
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "요청에 실패했어요."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "요청에 실패했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -36,7 +36,7 @@ export default function Login() {
       const r = await Api.verify(digits, code.trim(), nickname.trim() || undefined);
       await signIn(r.token);
       router.replace("/(tabs)/home");
-    } catch (e) { setErr(e instanceof ApiError ? e.message : "인증에 실패했어요."); }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "인증에 실패했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -81,8 +81,7 @@ export default function Login() {
       {err ? <ErrorBox message={err} /> : null}
 
       <Sub style={{ marginTop: 20 }}>
-        가입 시 1,000P를 드립니다. 결제 한도 해제를 위해서는 본인확인이 필요하며,
-        본인확인 전에는 미성년자 기준(1일 10만원)이 적용됩니다.
+        가입하면 1,000P를 받습니다. 본인확인 전에는 하루 10만원까지 결제됩니다.
       </Sub>
     </Screen>
   );

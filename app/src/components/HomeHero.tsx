@@ -102,8 +102,8 @@ export function HomeHero({ packs, onOpen }: { packs: Odds[]; onOpen: (id: number
 
                 <View style={st.metrics}>
                   <Text style={st.mLabel}>잔여</Text>
-                  <Text style={st.mValue}>{p.remaining_slots}</Text>
-                  <Text style={st.mOf}>/ {p.total_slots}</Text>
+                  <Text style={st.mValue}>{p.remaining_slots.toLocaleString("ko-KR")}</Text>
+                  <Text style={st.mOf}>/ {p.total_slots.toLocaleString("ko-KR")}</Text>
                 </View>
               </View>
 
