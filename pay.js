@@ -94,7 +94,7 @@ async function createCheckout({ kind, userId, refId, amount, title, payUrlOverri
   if (Number(open.c) >= MAX_OPEN_PER_USER) {
     const e = new Error("TOO_MANY_PENDING_PAYMENTS");
     e.status = 429;
-    e.message_ko = "결제 대기 중인 주문이 있어요. 먼저 결제하거나 취소해 주세요.";
+    e.message_ko = "결제 대기 중인 주문이 있습니다. 먼저 결제하거나 취소하세요.";
     throw e;
   }
 

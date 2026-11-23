@@ -145,7 +145,7 @@ async function cancelPayment({ kind, orderId, orderRef, pgKey, amount, reason })
     return { ok: true, refund_id: rid, dev: true };
   }
   return { ok: true, refund_id: rid, manual: true,
-    message: "환불 요청이 접수되었습니다. 영업일 기준 1~3일 내에 결제하신 수단으로 돌려드립니다." };
+    message: "환불 요청이 접수됐습니다. 영업일 기준 1~3일 안에 결제한 수단으로 돌아갑니다." };
 }
 
 app.get(["/", "/health"], (req, res) => {
@@ -305,7 +305,7 @@ app.post("/checkout", auth, h(async (req, res) => {
   const reserved = await pay.reservedSlots(pack.id);
   if (pack.total_slots - pack.sold_slots - reserved <= 0)
     return res.status(409).json({ error: "SOLD_OUT",
-      message: "지금은 결제 대기 중인 주문이 남은 수량을 모두 잡고 있어요. 잠시 후 다시 시도해 주세요." });
+      message: "결제 대기 중인 주문이 남은 수량을 모두 잡고 있습니다." });
 
   try {
     const out = await pay.createCheckout({
@@ -350,7 +350,7 @@ async function settleAndRespond(uid, opts, res, ownerId) {
   });
   if (!out.ok) return res.status(out.status || 409).json({ error: out.error, detail: out.detail,
     refund_requested: out.refund_requested,
-    message: out.refund_requested ? "결제는 확인됐지만 상품 확정에 실패했어요. 환불 요청을 접수했습니다." : undefined });
+    message: out.refund_requested ? "입금은 확인됐지만 개봉에 실패했습니다. 환불 요청이 접수됐습니다." : undefined });
   const after = await pay.find(uid);
   res.json({ ok: true, already: !!out.already,
     ...pay.publicView(after, await pay.getPaySettings()), dev_mode: PAY_DEV_MODE });
@@ -660,7 +660,7 @@ async function storeImage(data, label) {
   const m = /^data:([^;,]+);base64,(.+)$/s.exec(String(data || ""));
   if (!m) return { error: "BAD_IMAGE", status: 400, message: "data:image/...;base64, 형식이어야 합니다." };
   const [, mime, b64] = m;
-  if (!IMAGE_MIME[mime]) return { error: "BAD_MIME", status: 400, message: "JPEG · PNG · WebP만 올릴 수 있어요." };
+  if (!IMAGE_MIME[mime]) return { error: "BAD_MIME", status: 400, message: "JPEG · PNG · WebP만 올릴 수 있습니다." };
   const bytes = Buffer.byteLength(b64, "base64");
   if (bytes > MAX_IMAGE_BYTES)
     return { error: "IMAGE_TOO_LARGE", status: 413,
